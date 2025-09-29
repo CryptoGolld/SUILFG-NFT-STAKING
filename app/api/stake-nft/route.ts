@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { user_wallet, nft_object_id, nft_tier, staking_duration_days, referral_code_used } = body
+    const { user_wallet, nft_object_id, nft_tier, staking_duration_days, stake_duration_months, referral_code_used, verification_code } = body
 
     // Call Supabase Edge Function
     const response = await fetch(`${process.env.SUPABASE_URL}/functions/v1/stake-nft`, {
@@ -17,7 +17,9 @@ export async function POST(request: NextRequest) {
         nft_object_id,
         nft_tier,
         staking_duration_days,
-        referral_code_used
+        stake_duration_months,
+        referral_code_used,
+        verification_code
       })
     })
 
