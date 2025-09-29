@@ -111,6 +111,7 @@ serve(async (req) => {
     // Calculate stake end time
     const stakeStartTime = new Date()
     const stakeEndTime = new Date(stakeStartTime.getTime() + staking_duration_days * 24 * 60 * 60 * 1000)
+    const stakeEndTimeISO = stakeEndTime.toISOString()
 
     // If referral code was used, create referral record first
     if (referral_code_used) {
@@ -140,7 +141,7 @@ serve(async (req) => {
         staking_duration_days,
         stake_duration_months,
         stake_start_time: stakeStartTime.toISOString(),
-        stake_end_time: stakeEndTime.toISOString(),
+        stake_end_time: stakeEndTimeISO,
         referral_code_used: referral_code_used || null,
         verification_code: verification_code || null,
         referral_id: referralId,

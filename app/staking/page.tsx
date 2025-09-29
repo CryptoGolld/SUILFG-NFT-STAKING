@@ -7,8 +7,8 @@ import { Transaction } from '@mysten/sui.js/transactions'
 import Link from 'next/link'
 import Image from 'next/image'
 import toast from 'react-hot-toast'
-import { ArrowLeft, Wallet, Loader2, Calendar, Clock } from 'lucide-react'
-import { supabase, getUserStakedNFTs, determineNFTTier } from '@/lib/supabase'
+import { ArrowLeft, Wallet, Loader2, Calendar, Clock, User } from 'lucide-react'
+import { supabase, getUserStakedNFTs, determineNFTTier, getUserProfile, createUserProfile, getUserProfileByWallet } from '@/lib/supabase'
 
 // SuiLFG NFT Contract Details (from project registry)
 const SUILFG_NFT_CONTRACT = '0xbd672d1c158c963ade8549ae83bda75f29f6b3ce0c59480f3921407c4e8c6781'
@@ -49,6 +49,9 @@ export default function StakingPage() {
   const [userReferralCode, setUserReferralCode] = useState('')
   const [verificationCode, setVerificationCode] = useState('')
   const [stakedNftIds, setStakedNftIds] = useState<Set<string>>(new Set())
+  const [showUsernameModal, setShowUsernameModal] = useState(false)
+  const [username, setUsername] = useState('')
+  const [isNewUser, setIsNewUser] = useState(false)
 
   // Duration multipliers for rewards
   const getDurationMultiplier = (months: number) => {
@@ -60,24 +63,65 @@ export default function StakingPage() {
     }
   }
 
-  // Fetch user's NFTs and generate referral code
+  // Check if user needs username and fetch NFTs/referral code
   useEffect(() => {
     if (connected && currentAccount) {
+      checkUserProfile()
       fetchUserNfts()
-      generateReferralCode()
+      fetchReferralCode()
     }
   }, [connected, currentAccount])
 
-  // Generate unique referral code for the user
-  const generateReferralCode = async () => {
+  // Check if user has a profile (username)
+  const checkUserProfile = async () => {
     if (!currentAccount) return
 
-    // Generate a referral code based on wallet address
-    const code = currentAccount.address.slice(0, 8).toUpperCase()
-    setUserReferralCode(code)
+    try {
+      const profile = await getUserProfile(currentAccount.address)
+      if (!profile) {
+        setIsNewUser(true)
+        setShowUsernameModal(true)
+      }
+    } catch (error) {
+      console.error('Error checking user profile:', error)
+    }
+  }
 
-    // In a real app, you might want to store this in the database
-    // and ensure uniqueness across all users
+  // Fetch user's referral code from database
+  const fetchReferralCode = async () => {
+    if (!currentAccount) return
+
+    try {
+      const profile = await getUserProfileByWallet(currentAccount.address)
+      if (profile?.referral_code) {
+        setUserReferralCode(profile.referral_code)
+      }
+    } catch (error) {
+      console.error('Error fetching referral code:', error)
+    }
+  }
+
+  // Handle username creation
+  const handleCreateUsername = async () => {
+    if (!currentAccount || !username.trim()) return
+
+    setLoading(true)
+    try {
+      const profile = await createUserProfile(currentAccount.address, username.trim())
+      setUserReferralCode(profile.referral_code)
+      setShowUsernameModal(false)
+      setIsNewUser(false)
+      toast.success(`Welcome to SuiLFG Staking! Your referral code: ${profile.referral_code}`)
+    } catch (error: any) {
+      if (error.code === '23505') { // Unique constraint violation
+        toast.error('Username already taken. Please choose a different one.')
+      } else {
+        toast.error('Failed to create profile. Please try again.')
+      }
+      console.error('Error creating profile:', error)
+    } finally {
+      setLoading(false)
+    }
   }
 
   const fetchUserNfts = async () => {
@@ -422,6 +466,59 @@ export default function StakingPage() {
           </>
         )}
       </div>
+
+      {/* Username Modal for New Users */}
+      {showUsernameModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg max-w-md w-full p-6">
+            <h2 className="text-2xl font-bold mb-4 text-brand-900">Welcome to SuiLFG Staking!</h2>
+            <p className="text-gray-600 mb-6">
+              Please choose a username to get started. This will be your unique identifier in the community.
+            </p>
+
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Username
+              </label>
+              <input
+                type="text"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="Enter your username"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+                maxLength={20}
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                3-20 characters, letters and numbers only
+              </p>
+            </div>
+
+            <div className="flex space-x-3">
+              <button
+                onClick={() => setShowUsernameModal(false)}
+                className="flex-1 btn-secondary"
+                disabled={loading}
+              >
+                Skip for Now
+              </button>
+              <button
+                onClick={handleCreateUsername}
+                className="flex-1 btn-primary"
+                disabled={loading || !username.trim()}
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Creating...
+                  </>
+                ) : (
+                  'Create Profile'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Staking Modal */}
       {selectedNft && (

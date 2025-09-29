@@ -95,6 +95,11 @@ serve(async (req) => {
 
     // 3. Process active stakes with the updated logic
     for (const stake of activeStakes || []) {
+      // Ensure stake_end_time is properly set (handle any missing calculations)
+      if (!stake.stake_end_time) {
+        console.log(`Warning: stake ${stake.id} missing stake_end_time, skipping`)
+        continue
+      }
       try {
         // Verify NFT ownership using Sui RPC
         const ownershipResult = await verifyNFTOwnership(stake.nft_object_id, stake.user_wallet)

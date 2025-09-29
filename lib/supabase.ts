@@ -164,6 +164,80 @@ export const playVestingGamble = async (group_id: string, user_wallet: string) =
   return response.json()
 }
 
+export const getUserProfile = async (user_wallet: string) => {
+  const { data, error } = await supabase
+    .from('user_profiles')
+    .select('*')
+    .eq('user_wallet', user_wallet)
+    .single()
+
+  if (error && error.code !== 'PGRST116') {
+    throw error
+  }
+
+  return data
+}
+
+export const createUserProfile = async (user_wallet: string, username: string) => {
+  // Generate unique referral code
+  const referralCode = generateReferralCode()
+
+  const { data, error } = await supabase
+    .from('user_profiles')
+    .insert({
+      user_wallet,
+      username,
+      referral_code: referralCode
+    })
+    .select()
+    .single()
+
+  if (error) {
+    throw error
+  }
+
+  return data
+}
+
+// Generate a unique 8-character referral code
+function generateReferralCode(): string {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
+  let result = ''
+  for (let i = 0; i < 8; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length))
+  }
+  return result
+}
+
+export const updateUserProfile = async (user_wallet: string, updates: { username?: string; referral_code?: string }) => {
+  const { data, error } = await supabase
+    .from('user_profiles')
+    .update(updates)
+    .eq('user_wallet', user_wallet)
+    .select()
+    .single()
+
+  if (error) {
+    throw error
+  }
+
+  return data
+}
+
+export const getUserProfileByWallet = async (user_wallet: string) => {
+  const { data, error } = await supabase
+    .from('user_profiles')
+    .select('referral_code')
+    .eq('user_wallet', user_wallet)
+    .single()
+
+  if (error && error.code !== 'PGRST116') {
+    throw error
+  }
+
+  return data
+}
+
 // Utility function to determine NFT tier from blockchain data
 export const determineNFTTier = (nftData: any): 'Voter' | 'Governor' | 'Council' => {
   // Based on SuiLFG NFT contract structure from project registry

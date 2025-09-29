@@ -27,10 +27,12 @@
    ```
 
 2. **Verify Tables Created**:
+   - `user_profiles` (includes username and referral_code)
    - `staked_nfts`
    - `staking_rewards`
    - `manual_reward_grants`
    - `referrals`
+   - `referral_groups`
    - `forfeitures`
 
 ### 1.3 Edge Functions Deployment

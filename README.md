@@ -29,12 +29,16 @@ A comprehensive staking platform for SuiLFG NFTs with tier-based rewards (Gold, 
 
 ### Tables
 
-1. **`staked_nfts`**: Tracks all staked NFTs with metadata
-   - Added `verification_code` and `forfeited_by_referrer` fields
-2. **`staking_rewards`**: Accumulates points by tier (council_points, governor_points, voter_points)
-3. **`manual_reward_grants`**: Admin-managed special rewards
-4. **`referrals`**: Referral relationships for bonus rewards
-5. **`forfeitures`**: Tracks forfeited stakes and links them to referrers
+1. **`user_profiles`**: Stores user profile information including username and referral code
+2. **`staked_nfts`**: Tracks all staked NFTs with metadata
+   - Added `verification_code`, `forfeited_by_referrer`, `stake_duration_months`, and `referral_id` fields
+3. **`staking_rewards`**: Accumulates points by tier (council_points, governor_points, voter_points)
+4. **`manual_reward_grants`**: Admin-managed special rewards
+5. **`referrals`**: Referral relationships for bonus rewards
+   - Added `is_mapped_to_reward` field to prevent re-use
+6. **`referral_groups`**: Groups 3 referrals together for vesting rewards
+7. **`forfeitures`**: Tracks forfeited stakes and links them to referrers
+   - Added `'kiosk'` and `'listed'` forfeiture reasons
 
 ## 🎨 Visual Design
 
@@ -158,11 +162,17 @@ const POINTS_PER_HOUR = {
 - 10 × 6 = 60 points/hour (exact match)
 - 2 × 6 = 12 points/hour (exact match)
 
+### User System
+- **Username Requirement**: New users must create a username when first connecting their wallet
+- **Profile Management**: User profiles stored securely in Supabase with proper RLS policies
+- **Referral Codes**: Unique 8-character codes randomly generated and stored in user profiles
+
 ### Referral System
 - **Referral Codes**: Users get unique referral codes when they connect their wallet
 - **Staking with Referrals**: Users can enter referral codes when staking NFTs
 - **Minimum Staking Period**: 30 days minimum staking duration required
 - **Forfeiture Tracking**: If NFTs are transferred/sold before completion, the referrer is notified
+- **Independent Rewards**: Staking rewards continue regardless of referral status (as long as NFT is owned)
 
 ### Referral Rewards
 - Users get 1 confirmed referral per 10 days of active staking
