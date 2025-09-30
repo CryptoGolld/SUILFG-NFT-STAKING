@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useWallet } from '@mysten/dapp-kit'
+import { useCurrentWallet } from '@mysten/dapp-kit'
 import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client'
 import { Transaction } from '@mysten/sui.js/transactions'
 import Link from 'next/link'
@@ -39,7 +39,7 @@ const POINTS_PER_HOUR = {
 const MIN_STAKING_DAYS = 30
 
 export default function StakingPage() {
-  const { connected, currentAccount, signAndExecuteTransaction } = useWallet()
+  const { isConnected, currentWallet, signAndExecuteTransaction } = useCurrentWallet()
   const [nfts, setNfts] = useState<SuiLFGNFT[]>([])
   const [loading, setLoading] = useState(false)
   const [selectedNft, setSelectedNft] = useState<SuiLFGNFT | null>(null)
@@ -65,19 +65,19 @@ export default function StakingPage() {
 
   // Check if user needs username and fetch NFTs/referral code
   useEffect(() => {
-    if (connected && currentAccount) {
+    if (isConnected && currentWallet) {
       checkUserProfile()
       fetchUserNfts()
       fetchReferralCode()
     }
-  }, [connected, currentAccount])
+  }, [isConnected, currentWallet])
 
   // Check if user has a profile (username)
   const checkUserProfile = async () => {
-    if (!currentAccount) return
+    if (!currentWallet) return
 
     try {
-      const profile = await getUserProfile(currentAccount.address)
+      const profile = await getUserProfile(currentWallet.accounts[0].address)
       if (!profile) {
         setIsNewUser(true)
         setShowUsernameModal(true)
@@ -89,10 +89,10 @@ export default function StakingPage() {
 
   // Fetch user's referral code from database
   const fetchReferralCode = async () => {
-    if (!currentAccount) return
+    if (!currentWallet) return
 
     try {
-      const profile = await getUserProfileByWallet(currentAccount.address)
+      const profile = await getUserProfileByWallet(currentWallet.accounts[0].address)
       if (profile?.referral_code) {
         setUserReferralCode(profile.referral_code)
       }
@@ -103,11 +103,11 @@ export default function StakingPage() {
 
   // Handle username creation
   const handleCreateUsername = async () => {
-    if (!currentAccount || !username.trim()) return
+    if (!currentWallet || !username.trim()) return
 
     setLoading(true)
     try {
-      const profile = await createUserProfile(currentAccount.address, username.trim())
+      const profile = await createUserProfile(currentWallet.accounts[0].address, username.trim())
       setUserReferralCode(profile.referral_code)
       setShowUsernameModal(false)
       setIsNewUser(false)
@@ -125,12 +125,12 @@ export default function StakingPage() {
   }
 
   const fetchUserNfts = async () => {
-    if (!currentAccount) return
+    if (!currentWallet) return
 
     setLoading(true)
     try {
       // Get user's staked NFTs to filter them out
-      const stakedNfts = await getUserStakedNFTs(currentAccount.address)
+      const stakedNfts = await getUserStakedNFTs(currentWallet.accounts[0].address)
       const stakedIds = new Set(stakedNfts?.map(nft => nft.nft_object_id) || [])
       setStakedNftIds(stakedIds)
 
@@ -139,7 +139,7 @@ export default function StakingPage() {
 
       // Get all objects owned by the user
       const ownedObjects = await suiClient.getOwnedObjects({
-        owner: currentAccount.address,
+        owner: currentWallet.accounts[0].address,
         options: { showType: true, showContent: true }
       })
 
@@ -190,7 +190,7 @@ export default function StakingPage() {
   }
 
   const handleStake = async () => {
-    if (!selectedNft || !currentAccount) return
+    if (!selectedNft || !currentWallet) return
 
     // Validate minimum staking duration
     if (stakingDuration < MIN_STAKING_DAYS) {
@@ -232,16 +232,16 @@ export default function StakingPage() {
           headers: {
             'Content-Type': 'application/json',
           },
-        body: JSON.stringify({
-          user_wallet: currentAccount.address,
-          nft_object_id: selectedNft.id,
-          nft_tier: selectedNft.tier,
-          staking_duration_days: stakingDuration,
-          stake_duration_months: stakingMonths,
-          referral_code_used: referralCode || undefined,
-          verification_code: verificationCode || undefined,
-          signed_message: signMessage // In real implementation, this would be cryptographically signed
-        })
+          body: JSON.stringify({
+            user_wallet: currentWallet.accounts[0].address,
+            nft_object_id: selectedNft.id,
+            nft_tier: selectedNft.tier,
+            staking_duration_days: stakingDuration,
+            stake_duration_months: stakingMonths,
+            referral_code_used: referralCode || undefined,
+            verification_code: verificationCode || undefined,
+            signed_message: signMessage // In real implementation, this would be cryptographically signed
+          })
         })
 
         const data = await response.json()

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useWallet } from '@mysten/dapp-kit'
+import { useCurrentWallet } from '@mysten/dapp-kit'
 import Link from 'next/link'
 import Image from 'next/image'
 import { ArrowLeft, Wallet, Trophy, Coins, Star, Crown, Award, Clock, Users, AlertTriangle } from 'lucide-react'
@@ -47,7 +47,7 @@ interface ForfeitureData {
 }
 
 export default function DashboardPage() {
-  const { connected, currentAccount } = useWallet()
+  const { isConnected, currentWallet } = useCurrentWallet()
   const [rewards, setRewards] = useState<StakingRewards>({ council_points: 0, governor_points: 0, voter_points: 0 })
   const [stakedNfts, setStakedNfts] = useState<StakedNFT[]>([])
   const [manualGrants, setManualGrants] = useState<ManualGrant[]>([])
@@ -56,18 +56,18 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
-    if (connected && currentAccount) {
+    if (isConnected && currentWallet) {
       fetchDashboardData()
     }
-  }, [connected, currentAccount])
+  }, [isConnected, currentWallet])
 
   const fetchDashboardData = async () => {
-    if (!currentAccount) return
+    if (!currentWallet) return
 
     setLoading(true)
     try {
       // Fetch rewards
-      const rewardsData = await getUserRewards(currentAccount.address)
+      const rewardsData = await getUserRewards(currentWallet.accounts[0].address)
       if (rewardsData) {
         setRewards({
           council_points: rewardsData.council_points || 0,
@@ -77,7 +77,7 @@ export default function DashboardPage() {
       }
 
       // Fetch staked NFTs
-      const stakedData = await getUserStakedNFTs(currentAccount.address)
+      const stakedData = await getUserStakedNFTs(currentWallet.accounts[0].address)
       if (stakedData) {
         const formattedStakedNfts: StakedNFT[] = stakedData.map(nft => ({
           id: nft.id,
@@ -95,7 +95,7 @@ export default function DashboardPage() {
       const { data: grantsData } = await supabase
         .from('manual_reward_grants')
         .select('*')
-        .eq('user_wallet', currentAccount.address)
+        .eq('user_wallet', currentWallet.accounts[0].address)
         .eq('status', 'active')
         .or('grant_end_time.is.null,grant_end_time.gte.' + new Date().toISOString())
 
@@ -110,7 +110,7 @@ export default function DashboardPage() {
       }
 
       // Fetch referrals
-      const referralsData = await getUserReferrals(currentAccount.address)
+      const referralsData = await getUserReferrals(currentWallet.accounts[0].address)
       if (referralsData) {
         const totalReferrals = referralsData.length
         const confirmedReferrals = referralsData.filter(r => r.status === 'confirmed').length
@@ -135,7 +135,7 @@ export default function DashboardPage() {
           forfeited_at,
           staked_nfts!inner(nft_tier)
         `)
-        .eq('referrer_wallet', currentAccount.address)
+        .eq('referrer_wallet', currentWallet.accounts[0].address)
         .order('forfeited_at', { ascending: false })
 
       if (forfeituresData) {
@@ -213,14 +213,14 @@ export default function DashboardPage() {
               </Link>
             </div>
             <div className="flex items-center">
-              {!connected ? (
+              {!isConnected ? (
                 <button className="btn-primary flex items-center">
                   <Wallet className="w-4 h-4 mr-2" />
                   Connect Wallet
                 </button>
               ) : (
                 <span className="text-sm text-gray-600">
-                  Connected: {currentAccount?.address?.slice(0, 6)}...{currentAccount?.address?.slice(-4)}
+                  Connected: {currentWallet?.accounts[0]?.address?.slice(0, 6)}...{currentWallet?.accounts[0]?.address?.slice(-4)}
                 </span>
               )}
             </div>

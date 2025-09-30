@@ -3,12 +3,12 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
-import { useWallet } from '@mysten/dapp-kit'
+import { useCurrentWallet } from '@mysten/dapp-kit'
 import { Coins, Trophy, Users, ExternalLink, Twitter } from 'lucide-react'
 import { getCollectionMetadata } from '@/lib/supabase'
 
 export default function HomePage() {
-  const { connected } = useWallet()
+  const { isConnected } = useCurrentWallet()
   const collectionMetadata = getCollectionMetadata()
 
   return (
@@ -46,7 +46,7 @@ export default function HomePage() {
               >
                 Dashboard
               </Link>
-              {!connected && (
+              {!isConnected && (
                 <button className="btn-primary">
                   Connect Wallet
                 </button>
