@@ -59,24 +59,26 @@ async function fetchKioskNfts(suiClient: SuiClient, ownerAddress: string): Promi
         do {
           const dfields = await suiClient.getDynamicFields({ parentId: kioskId, cursor: cursor || undefined })
           for (const df of dfields.data) {
-            const name: any = df.name as any
-            const objectId: string | undefined = name?.value || name?.id || name?.fields?.id
-            if (!objectId || typeof objectId !== 'string' || !objectId.startsWith('0x')) continue
-
             try {
-              const obj = await suiClient.getObject({ id: objectId, options: { showType: true, showContent: true } })
-              const data: any = obj.data
+              // Fetch the dynamic field object to resolve the kiosk item, then extract the held object ID
+              const dfo = await suiClient.getDynamicFieldObject({ parentId: kioskId, name: df.name as any })
+              const valueFields: any = (dfo as any)?.data?.content?.fields?.value?.fields
+              const heldObjectId: string | undefined = valueFields?.id?.id || valueFields?.object_id || valueFields?.item_id
+              if (!heldObjectId || typeof heldObjectId !== 'string' || !heldObjectId.startsWith('0x')) continue
+
+              const obj = await suiClient.getObject({ id: heldObjectId, options: { showType: true, showContent: true } })
+              const data: any = (obj as any)?.data
               if (data?.type?.includes(NFT_TYPE)) {
-                const content = data.content as any
-                const fields = content?.fields || {}
-                const attributes = fields.attributes || []
+                const nftContent = data.content as any
+                const nftFields = nftContent?.fields || {}
+                const attributes = nftFields.attributes || []
                 const votingPower = attributes.find((attr: any) => attr.trait_type === 'Voting Power')?.value || '1.5x'
 
                 results.push({
                   id: data.objectId,
-                  name: fields.name || `SuiLFG #${data.objectId.slice(-4)}`,
-                  image: fields.image_url || fields.url || '',
-                  tier: determineNFTTier(fields),
+                  name: nftFields.name || `SuiLFG #${data.objectId.slice(-4)}`,
+                  image: nftFields.image_url || nftFields.url || '',
+                  tier: determineNFTTier(nftFields),
                   attributes: {
                     votingPower,
                     rarity: attributes.find((attr: any) => attr.trait_type === 'Rarity')?.value || 'Common'
@@ -84,7 +86,7 @@ async function fetchKioskNfts(suiClient: SuiClient, ownerAddress: string): Promi
                 })
               }
             } catch (e) {
-              console.warn('Failed to load kiosk item object:', e)
+              console.warn('Failed to load kiosk item via dynamic field:', e)
             }
           }
           cursor = dfields.nextCursor
@@ -358,10 +360,9 @@ export default function StakingPage() {
             </div>
             <div className="flex items-center">
               {!isConnected ? (
-                <button className="btn-primary flex items-center">
-                  <Wallet className="w-4 h-4 mr-2" />
+                <ConnectButton className="btn-primary">
                   Connect Wallet
-                </button>
+                </ConnectButton>
               ) : (
                 <span className="text-sm text-gray-600">
                   Connected: {currentWallet?.accounts[0]?.address?.slice(0, 6)}...{currentWallet?.accounts[0]?.address?.slice(-4)}
@@ -381,11 +382,11 @@ export default function StakingPage() {
         </div>
 
         {!isConnected ? (
-          <div className="text-center py-20">
-            <Wallet className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+          <div className="text-center py-16 sm:py-20 px-4">
+            <Wallet className="w-12 h-12 sm:w-16 sm:h-16 text-gray-400 mx-auto mb-4" />
             <h2 className="text-2xl font-semibold text-gray-900 mb-2">Connect Your Wallet</h2>
-            <p className="text-gray-600 mb-6">Please connect your Sui wallet to view and stake your NFTs.</p>
-            <ConnectButton className="btn-primary">
+            <p className="text-gray-600 mb-6 max-w-md mx-auto">Please connect your Sui wallet to view and stake your NFTs.</p>
+            <ConnectButton className="btn-primary w-full sm:w-auto">
               Connect Wallet
             </ConnectButton>
           </div>
@@ -560,13 +561,6 @@ export default function StakingPage() {
             </div>
 
             <div className="flex space-x-3">
-              <button
-                onClick={() => setShowUsernameModal(false)}
-                className="flex-1 btn-secondary"
-                disabled={loading}
-              >
-                Skip for Now
-              </button>
               <button
                 onClick={handleCreateUsername}
                 className="flex-1 btn-primary"
