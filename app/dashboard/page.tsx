@@ -141,7 +141,7 @@ export default function DashboardPage() {
       if (forfeituresData) {
         const formattedForfeitures: ForfeitureData[] = forfeituresData.map(forfeiture => ({
           id: forfeiture.id,
-          staked_nft_name: `SuiLFG ${forfeiture.staked_nfts.nft_tier}`,
+          staked_nft_name: `SuiLFG ${forfeiture.staked_nfts?.[0]?.nft_tier || 'Unknown'}`,
           original_staker_wallet: forfeiture.original_staker_wallet,
           forfeiture_reason: forfeiture.forfeiture_reason,
           forfeited_at: forfeiture.forfeited_at

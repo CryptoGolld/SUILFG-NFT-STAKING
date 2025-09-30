@@ -71,10 +71,10 @@ serve(async (req) => {
         referrer_wallet,
         staked_nft_id,
         status,
-        staked_nfts!inner(nft_tier, stake_start_time)
+        staked_nfts!inner(nft_tier)
       `)
       .eq('status', 'pending')
-      .lte('staked_nfts.stake_start_time', tenDaysAgo.toISOString())
+      .gte('staked_nfts.stake_start_time', tenDaysAgo.toISOString())
 
     if (referralsError) {
       console.error('Failed to fetch eligible referrals:', referralsError)
@@ -276,7 +276,7 @@ serve(async (req) => {
         referral_1_id,
         referral_2_id,
         referral_3_id,
-        referrals!inner(status, staked_nfts!inner(stake_start_time))
+        referrals!inner(status)
       `)
       .in('status', ['vesting', 'claimable'])
 
