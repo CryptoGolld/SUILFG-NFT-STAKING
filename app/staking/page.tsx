@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react'
 import { useCurrentWallet } from '@mysten/dapp-kit'
 import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client'
-import { Transaction } from '@mysten/sui.js/transactions'
 import Link from 'next/link'
 import Image from 'next/image'
 import toast from 'react-hot-toast'
