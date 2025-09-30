@@ -325,14 +325,16 @@ export default function StakingPage() {
             <Wallet className="w-16 h-16 text-gray-400 mx-auto mb-4" />
             <h2 className="text-2xl font-semibold text-gray-900 mb-2">Connect Your Wallet</h2>
             <p className="text-gray-600 mb-6">Please connect your Sui wallet to view and stake your NFTs.</p>
-            <ConnectButton className="btn-primary" />
+            <ConnectButton className="btn-primary">
+              Connect Wallet
+            </ConnectButton>
           </div>
         ) : (
           <>
             {/* Staking Duration Selector */}
             <div className="bg-white rounded-lg shadow-lg p-6 mb-8">
               <h2 className="text-xl font-semibold mb-4">Choose Staking Duration</h2>
-              <div className="grid grid-cols-3 gap-4 mb-6">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
                 {[1, 2, 3].map((months: number) => {
                   const days = months * 30
                   const multiplier = getDurationMultiplier(months)
@@ -375,16 +377,16 @@ export default function StakingPage() {
             {isConnected && userReferralCode && (
               <div className="bg-brand-50 rounded-lg shadow-lg p-6 mb-8 border border-brand-200">
                 <h2 className="text-xl font-semibold mb-4 text-brand-900">Your Referral Code</h2>
-                <div className="flex items-center space-x-3">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-3">
                   <div className="bg-brand-100 px-4 py-2 rounded-lg border-2 border-brand-300">
-                    <code className="text-lg font-mono font-bold text-brand-800">{userReferralCode}</code>
+                    <code className="text-lg font-mono font-bold text-brand-800 break-all">{userReferralCode}</code>
                   </div>
                   <button
                     onClick={() => {
                       navigator.clipboard.writeText(userReferralCode)
                       toast.success('Referral code copied to clipboard!')
                     }}
-                    className="btn-secondary text-sm"
+                    className="btn-secondary text-sm w-full sm:w-auto"
                   >
                     Copy
                   </button>
@@ -424,7 +426,7 @@ export default function StakingPage() {
                   <p className="text-gray-500">No SuiLFG NFTs found in your wallet.</p>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
                   {nfts.map((nft: SuiLFGNFT) => {
                     const colors = getTierColorClasses(nft.tier)
                     return (
@@ -439,11 +441,11 @@ export default function StakingPage() {
                             className="w-full h-full object-cover"
                           />
                         </div>
-                        <div className="p-4">
-                          <h3 className="font-semibold text-lg mb-1">{nft.name}</h3>
-                          <div className="flex items-center justify-between mb-3">
+                        <div className="p-3 sm:p-4">
+                          <h3 className="font-semibold text-base sm:text-lg mb-1 truncate">{nft.name}</h3>
+                          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-3 gap-2">
                             <div className="flex flex-col">
-                              <span className={`px-2 py-1 rounded text-xs font-medium ${colors.text} bg-white`}>
+                              <span className={`px-2 py-1 rounded text-xs font-medium ${colors.text} bg-white w-fit`}>
                                 {nft.tier}
                               </span>
                               <span className="text-xs text-gray-600 mt-1">
@@ -456,7 +458,7 @@ export default function StakingPage() {
                           </div>
                           <button
                             onClick={() => setSelectedNft(nft)}
-                            className={`w-full ${colors.button} text-white py-2 px-4 rounded-lg font-medium transition-colors`}
+                            className={`w-full ${colors.button} text-white py-2 px-3 sm:px-4 rounded-lg font-medium transition-colors text-sm`}
                           >
                             Stake for {stakingDuration} Days
                           </button>
@@ -526,19 +528,19 @@ export default function StakingPage() {
 
       {/* Staking Modal */}
       {selectedNft && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg max-w-md w-full p-6">
-            <h2 className="text-2xl font-bold mb-4">Confirm Staking</h2>
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-2 sm:p-4 z-50">
+          <div className="bg-white rounded-lg max-w-md w-full max-h-[90vh] overflow-y-auto p-4 sm:p-6">
+            <h2 className="text-xl sm:text-2xl font-bold mb-4">Confirm Staking</h2>
 
             <div className="mb-6">
               <div className="flex items-center space-x-3 mb-4">
                 <img
                   src={selectedNft.image}
                   alt={selectedNft.name}
-                  className="w-16 h-16 rounded-lg object-cover"
+                  className="w-12 h-12 sm:w-16 sm:h-16 rounded-lg object-cover"
                 />
-                <div>
-                  <h3 className="font-semibold">{selectedNft.name}</h3>
+                <div className="min-w-0 flex-1">
+                  <h3 className="font-semibold truncate">{selectedNft.name}</h3>
                   <p className="text-sm text-gray-600 capitalize">{selectedNft.tier} Tier</p>
                   <p className="text-xs text-brand-600 mt-1">
                     {selectedNft.attributes.votingPower} voting power
@@ -546,7 +548,7 @@ export default function StakingPage() {
                 </div>
               </div>
 
-              <div className="space-y-3 text-sm">
+              <div className="space-y-2 sm:space-y-3 text-sm">
                 <div className="flex justify-between">
                   <span>Staking Duration:</span>
                   <span className="font-medium">{stakingMonths} month{stakingMonths > 1 ? 's' : ''} ({stakingDuration} days)</span>
@@ -574,7 +576,7 @@ export default function StakingPage() {
                 {referralCode && (
                   <div className="flex justify-between">
                     <span>Referral Code:</span>
-                    <span className="font-medium">{referralCode}</span>
+                    <span className="font-medium break-all">{referralCode}</span>
                   </div>
                 )}
               </div>
@@ -598,10 +600,10 @@ export default function StakingPage() {
             </div>
 
             {/* Important Warning */}
-            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+            <div className="mb-6 p-3 sm:p-4 bg-red-50 border border-red-200 rounded-lg">
               <h3 className="text-sm font-semibold text-red-800 mb-2 flex items-center">
-                <AlertTriangle className="w-4 h-4 mr-2" />
-                Important: Do NOT List, Transfer, or Sell During Staking
+                <AlertTriangle className="w-4 h-4 mr-2 flex-shrink-0" />
+                <span className="break-words">Important: Do NOT List, Transfer, or Sell During Staking</span>
               </h3>
               <p className="text-sm text-red-700 mb-2">
                 <strong>Warning:</strong> If you list, transfer, or sell your staked NFT before the staking duration ends, you will:
@@ -616,17 +618,17 @@ export default function StakingPage() {
               </p>
             </div>
 
-            <div className="flex space-x-3">
+            <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
               <button
                 onClick={() => setSelectedNft(null)}
-                className="flex-1 btn-secondary"
+                className="flex-1 btn-secondary order-2 sm:order-1"
                 disabled={loading}
               >
                 Cancel
               </button>
               <button
                 onClick={handleStake}
-                className="flex-1 btn-primary"
+                className="flex-1 btn-primary order-1 sm:order-2"
                 disabled={loading}
               >
                 {loading ? (

@@ -47,7 +47,9 @@ export default function HomePage() {
                 Dashboard
               </Link>
               {!isConnected && (
-                <ConnectButton className="btn-primary" />
+                <ConnectButton className="btn-primary">
+                  Connect Wallet
+                </ConnectButton>
               )}
             </div>
           </div>

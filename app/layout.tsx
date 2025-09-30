@@ -24,7 +24,10 @@ export default function RootLayout({
             }}
             defaultNetwork="mainnet"
           >
-            <WalletProvider>
+            <WalletProvider
+              autoConnect={false}
+              storageKey="sui-wallet"
+            >
               {children}
               <Toaster position="top-right" />
             </WalletProvider>

@@ -236,7 +236,9 @@ export default function DashboardPage() {
             <Wallet className="w-16 h-16 text-gray-400 mx-auto mb-4" />
             <h2 className="text-2xl font-semibold text-gray-900 mb-2">Connect Your Wallet</h2>
             <p className="text-gray-600 mb-6">Please connect your Sui wallet to view your dashboard.</p>
-            <ConnectButton className="btn-primary" />
+            <ConnectButton className="btn-primary">
+              Connect Wallet
+            </ConnectButton>
           </div>
         ) : (
           <>
@@ -247,54 +249,54 @@ export default function DashboardPage() {
             </div>
 
             {/* Tiered Rewards Display - The Main Feature */}
-            <div className="grid md:grid-cols-3 gap-6 mb-8">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 sm:gap-6 mb-8">
               {/* Council (Gold) Rewards */}
-              <div className="tier-card-gold rounded-xl p-6 text-center">
+              <div className="tier-card-gold rounded-xl p-4 sm:p-6 text-center">
                 <div className="flex items-center justify-center mb-4">
-                  <div className="p-3 bg-white bg-opacity-20 rounded-full">
-                    <Crown className="w-8 h-8 text-white" />
+                  <div className="p-2 sm:p-3 bg-white bg-opacity-20 rounded-full">
+                    <Crown className="w-6 h-6 sm:w-8 sm:h-8 text-white" />
                   </div>
                 </div>
-                <h2 className="text-2xl font-bold mb-2 text-white">Council Points</h2>
-                <div className="text-4xl font-bold text-white mb-2">
+                <h2 className="text-lg sm:text-2xl font-bold mb-2 text-white">Council Points</h2>
+                <div className="text-2xl sm:text-4xl font-bold text-white mb-2">
                   {formatNumber(rewards.council_points)}
                 </div>
                 <p className="text-white text-opacity-90 text-sm">Gold Tier Rewards</p>
               </div>
 
               {/* Governor (Silver) Rewards */}
-              <div className="tier-card-silver rounded-xl p-6 text-center">
+              <div className="tier-card-silver rounded-xl p-4 sm:p-6 text-center">
                 <div className="flex items-center justify-center mb-4">
-                  <div className="p-3 bg-white bg-opacity-20 rounded-full">
-                    <Star className="w-8 h-8 text-white" />
+                  <div className="p-2 sm:p-3 bg-white bg-opacity-20 rounded-full">
+                    <Star className="w-6 h-6 sm:w-8 sm:h-8 text-white" />
                   </div>
                 </div>
-                <h2 className="text-2xl font-bold mb-2 text-white">Governor Points</h2>
-                <div className="text-4xl font-bold text-white mb-2">
+                <h2 className="text-lg sm:text-2xl font-bold mb-2 text-white">Governor Points</h2>
+                <div className="text-2xl sm:text-4xl font-bold text-white mb-2">
                   {formatNumber(rewards.governor_points)}
                 </div>
                 <p className="text-white text-opacity-90 text-sm">Silver Tier Rewards</p>
               </div>
 
               {/* Voter (Bronze) Rewards */}
-              <div className="tier-card-bronze rounded-xl p-6 text-center">
+              <div className="tier-card-bronze rounded-xl p-4 sm:p-6 text-center sm:col-span-2 md:col-span-1">
                 <div className="flex items-center justify-center mb-4">
-                  <div className="p-3 bg-white bg-opacity-20 rounded-full">
-                    <Award className="w-8 h-8 text-white" />
+                  <div className="p-2 sm:p-3 bg-white bg-opacity-20 rounded-full">
+                    <Award className="w-6 h-6 sm:w-8 sm:h-8 text-white" />
                   </div>
                 </div>
-                <h2 className="text-2xl font-bold mb-2 text-white">Voter Points</h2>
-                <div className="text-4xl font-bold text-white mb-2">
+                <h2 className="text-lg sm:text-2xl font-bold mb-2 text-white">Voter Points</h2>
+                <div className="text-2xl sm:text-4xl font-bold text-white mb-2">
                   {formatNumber(rewards.voter_points)}
                 </div>
                 <p className="text-white text-opacity-90 text-sm">Bronze Tier Rewards</p>
               </div>
             </div>
 
-            <div className="grid lg:grid-cols-2 gap-8">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8">
               {/* Staked NFTs */}
-              <div className="bg-white rounded-lg shadow-lg p-6">
-                <h2 className="text-xl font-semibold mb-4 flex items-center">
+              <div className="bg-white rounded-lg shadow-lg p-4 sm:p-6">
+                <h2 className="text-lg sm:text-xl font-semibold mb-4 flex items-center">
                   <Clock className="w-5 h-5 mr-2" />
                   Your Staked NFTs
                 </h2>
@@ -330,29 +332,29 @@ export default function DashboardPage() {
               </div>
 
               {/* Referral Tracker */}
-              <div className="bg-white rounded-lg shadow-lg p-6">
-                <h2 className="text-xl font-semibold mb-4 flex items-center">
+              <div className="bg-white rounded-lg shadow-lg p-4 sm:p-6">
+                <h2 className="text-lg sm:text-xl font-semibold mb-4 flex items-center">
                   <Users className="w-5 h-5 mr-2" />
                   Referral Program
                 </h2>
 
                 <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4 text-center">
-                    <div className="p-3 bg-green-50 rounded-lg">
-                      <div className="text-2xl font-bold text-green-600">{referrals.confirmedReferrals}</div>
+                  <div className="grid grid-cols-2 gap-3 sm:gap-4 text-center">
+                    <div className="p-2 sm:p-3 bg-green-50 rounded-lg">
+                      <div className="text-xl sm:text-2xl font-bold text-green-600">{referrals.confirmedReferrals}</div>
                       <div className="text-sm text-green-600">Confirmed</div>
                     </div>
-                    <div className="p-3 bg-yellow-50 rounded-lg">
-                      <div className="text-2xl font-bold text-yellow-600">{referrals.pendingReferrals}</div>
+                    <div className="p-2 sm:p-3 bg-yellow-50 rounded-lg">
+                      <div className="text-xl sm:text-2xl font-bold text-yellow-600">{referrals.pendingReferrals}</div>
                       <div className="text-sm text-yellow-600">Pending</div>
                     </div>
                   </div>
 
                   <div className="text-center">
-                    <div className="text-lg font-semibold">Progress to Next NFT Reward</div>
-                    <div className="w-full bg-gray-200 rounded-full h-3 mt-2">
+                    <div className="text-base sm:text-lg font-semibold">Progress to Next NFT Reward</div>
+                    <div className="w-full bg-gray-200 rounded-full h-2 sm:h-3 mt-2">
                       <div
-                        className="bg-blue-500 h-3 rounded-full transition-all"
+                        className="bg-blue-500 h-2 sm:h-3 rounded-full transition-all"
                         style={{ width: `${(referrals.confirmedReferrals / referrals.nextRewardAt) * 100}%` }}
                       ></div>
                     </div>
@@ -450,8 +452,8 @@ export default function DashboardPage() {
             )}
 
             {/* Action Buttons */}
-            <div className="mt-8 flex flex-col sm:flex-row gap-4 justify-center">
-              <Link href="/staking" className="btn-primary">
+            <div className="mt-6 sm:mt-8 flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center">
+              <Link href="/staking" className="btn-primary text-center">
                 Manage Staking
               </Link>
               <button
