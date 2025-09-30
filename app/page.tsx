@@ -1,4 +1,6 @@
 'use client'
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
 import Link from 'next/link'
 import Image from 'next/image'
 import { useCurrentWallet } from '@mysten/dapp-kit'
@@ -109,10 +111,10 @@ export default function HomePage() {
             >
               Start Staking
             </Link>
-            <Link
-              href="/dashboard"
-              className="btn-secondary text-lg px-8 py-3"
-            >
+              <Link
+                href="/dashboard"
+                className="btn-secondary text-lg px-8 py-3"
+              >
               View Dashboard
             </Link>
           </div>

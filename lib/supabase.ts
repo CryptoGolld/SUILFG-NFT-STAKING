@@ -1,9 +1,31 @@
 import { createClient } from '@supabase/supabase-js'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+let supabaseClient: ReturnType<typeof createClient> | null = null
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+export function getSupabase() {
+  if (!supabaseClient) {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+    if (!supabaseUrl || !supabaseAnonKey) {
+      // Avoid throwing during Next.js static prerender. Only enforce at runtime when used.
+      if (typeof window === 'undefined') {
+        // Return a minimal proxy that throws on method access if accidentally used during build.
+        const handler: ProxyHandler<any> = {
+          get() {
+            throw new Error('Supabase client accessed during build without environment variables set.')
+          }
+        }
+        return new Proxy({}, handler) as any
+      }
+      throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY')
+    }
+
+    supabaseClient = createClient(supabaseUrl, supabaseAnonKey)
+  }
+
+  return supabaseClient as ReturnType<typeof createClient>
+}
 
 // Types for our database schema
 export interface StakedNFT {
@@ -66,7 +88,7 @@ export const stakeNFT = async (stakeData: {
 }
 
 export const getUserRewards = async (user_wallet: string) => {
-  const { data, error } = await supabase
+  const { data, error } = await getSupabase()
     .from('staking_rewards')
     .select('*')
     .eq('user_wallet', user_wallet)
@@ -80,7 +102,7 @@ export const getUserRewards = async (user_wallet: string) => {
 }
 
 export const getUserStakedNFTs = async (user_wallet: string) => {
-  const { data, error } = await supabase
+  const { data, error } = await getSupabase()
     .from('staked_nfts')
     .select('*')
     .eq('user_wallet', user_wallet)
@@ -94,7 +116,7 @@ export const getUserStakedNFTs = async (user_wallet: string) => {
 }
 
 export const getUserReferrals = async (user_wallet: string) => {
-  const { data, error } = await supabase
+  const { data, error } = await getSupabase()
     .from('referrals')
     .select(`
       *,
@@ -110,7 +132,7 @@ export const getUserReferrals = async (user_wallet: string) => {
 }
 
 export const getManualGrants = async (user_wallet: string) => {
-  const { data, error } = await supabase
+  const { data, error } = await getSupabase()
     .from('manual_reward_grants')
     .select('*')
     .eq('user_wallet', user_wallet)
@@ -125,7 +147,7 @@ export const getManualGrants = async (user_wallet: string) => {
 }
 
 export const getUserReferralGroups = async (user_wallet: string) => {
-  const { data, error } = await supabase
+  const { data, error } = await getSupabase()
     .from('referral_groups')
     .select(`
       id,
@@ -165,7 +187,7 @@ export const playVestingGamble = async (group_id: string, user_wallet: string) =
 }
 
 export const getUserProfile = async (user_wallet: string) => {
-  const { data, error } = await supabase
+  const { data, error } = await getSupabase()
     .from('user_profiles')
     .select('*')
     .eq('user_wallet', user_wallet)
@@ -182,7 +204,7 @@ export const createUserProfile = async (user_wallet: string, username: string) =
   // Generate unique referral code
   const referralCode = generateReferralCode()
 
-  const { data, error } = await supabase
+  const { data, error } = await getSupabase()
     .from('user_profiles')
     .insert({
       user_wallet,
@@ -210,7 +232,7 @@ function generateReferralCode(): string {
 }
 
 export const updateUserProfile = async (user_wallet: string, updates: { username?: string; referral_code?: string }) => {
-  const { data, error } = await supabase
+  const { data, error } = await getSupabase()
     .from('user_profiles')
     .update(updates)
     .eq('user_wallet', user_wallet)
@@ -225,7 +247,7 @@ export const updateUserProfile = async (user_wallet: string, updates: { username
 }
 
 export const getUserProfileByWallet = async (user_wallet: string) => {
-  const { data, error } = await supabase
+  const { data, error } = await getSupabase()
     .from('user_profiles')
     .select('referral_code')
     .eq('user_wallet', user_wallet)

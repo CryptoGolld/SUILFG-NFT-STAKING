@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { getSupabase } from '@/lib/supabase'
 
 export async function POST(request: NextRequest) {
   try {
@@ -13,12 +13,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    )
-
-    const { data: rewards, error } = await supabase
+    const { data: rewards, error } = await getSupabase()
       .from('staking_rewards')
       .select('*')
       .eq('user_wallet', user_wallet)

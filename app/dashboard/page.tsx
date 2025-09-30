@@ -1,4 +1,6 @@
 'use client'
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
 
 import { useState, useEffect } from 'react'
 import { useCurrentWallet } from '@mysten/dapp-kit'
@@ -6,7 +8,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { ArrowLeft, Wallet, Trophy, Coins, Star, Crown, Award, Clock, Users, AlertTriangle } from 'lucide-react'
 import toast from 'react-hot-toast'
-import { supabase, getUserRewards, getUserStakedNFTs, getUserReferrals } from '@/lib/supabase'
+import { getSupabase, getUserRewards, getUserStakedNFTs, getUserReferrals } from '@/lib/supabase'
 
 interface StakingRewards {
   council_points: number
@@ -92,7 +94,7 @@ export default function DashboardPage() {
       }
 
       // Fetch manual grants
-      const { data: grantsData } = await supabase
+      const { data: grantsData } = await getSupabase()
         .from('manual_reward_grants')
         .select('*')
         .eq('user_wallet', currentWallet.accounts[0].address)
@@ -125,7 +127,7 @@ export default function DashboardPage() {
       }
 
       // Fetch forfeitures (stakes that were forfeited by users who used this user's referral code)
-      const { data: forfeituresData } = await supabase
+      const { data: forfeituresData } = await getSupabase()
         .from('forfeitures')
         .select(`
           id,
