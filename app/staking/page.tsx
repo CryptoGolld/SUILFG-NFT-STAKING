@@ -1,13 +1,13 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, ChangeEvent } from 'react'
 import { useCurrentWallet } from '@mysten/dapp-kit'
 import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client'
 import Link from 'next/link'
 import Image from 'next/image'
 import toast from 'react-hot-toast'
-import { ArrowLeft, Wallet, Loader2, Calendar, Clock, User } from 'lucide-react'
-import { supabase, getUserStakedNFTs, determineNFTTier, getUserProfile, createUserProfile, getUserProfileByWallet } from '@/lib/supabase'
+import { ArrowLeft, Wallet, Loader2 } from 'lucide-react'
+import { getUserStakedNFTs, determineNFTTier, getUserProfile, createUserProfile, getUserProfileByWallet } from '@/lib/supabase'
 
 // SuiLFG NFT Contract Details (from project registry)
 const SUILFG_NFT_CONTRACT = '0xbd672d1c158c963ade8549ae83bda75f29f6b3ce0c59480f3921407c4e8c6781'
@@ -18,7 +18,7 @@ interface SuiLFGNFT {
   name: string
   image: string
   tier: 'Voter' | 'Governor' | 'Council'
-  attributes: { rarity: string; power: number }
+  attributes: { rarity: string; votingPower: string }
 }
 
 const TIER_COLORS = {
@@ -38,7 +38,8 @@ const POINTS_PER_HOUR = {
 const MIN_STAKING_DAYS = 30
 
 export default function StakingPage() {
-  const { isConnected, currentWallet, signAndExecuteTransaction } = useCurrentWallet()
+  const { isConnected, currentWallet } = useCurrentWallet()
+  const { mutate: signAndExecuteTransaction } = useSignAndExecuteTransaction()
   const [nfts, setNfts] = useState<SuiLFGNFT[]>([])
   const [loading, setLoading] = useState(false)
   const [selectedNft, setSelectedNft] = useState<SuiLFGNFT | null>(null)
@@ -130,7 +131,7 @@ export default function StakingPage() {
     try {
       // Get user's staked NFTs to filter them out
       const stakedNfts = await getUserStakedNFTs(currentWallet.accounts[0].address)
-      const stakedIds = new Set(stakedNfts?.map(nft => nft.nft_object_id) || [])
+      const stakedIds = new Set<string>((stakedNfts?.map((nft: { nft_object_id: string }) => nft.nft_object_id) as string[]) || [])
       setStakedNftIds(stakedIds)
 
       // Create Sui client for blockchain queries
@@ -295,14 +296,14 @@ export default function StakingPage() {
               </Link>
             </div>
             <div className="flex items-center">
-              {!connected ? (
+              {!isConnected ? (
                 <button className="btn-primary flex items-center">
                   <Wallet className="w-4 h-4 mr-2" />
                   Connect Wallet
                 </button>
               ) : (
                 <span className="text-sm text-gray-600">
-                  Connected: {currentAccount?.address?.slice(0, 6)}...{currentAccount?.address?.slice(-4)}
+                  Connected: {currentWallet?.accounts[0]?.address?.slice(0, 6)}...{currentWallet?.accounts[0]?.address?.slice(-4)}
                 </span>
               )}
             </div>
@@ -318,7 +319,7 @@ export default function StakingPage() {
           </p>
         </div>
 
-        {!connected ? (
+        {!isConnected ? (
           <div className="text-center py-20">
             <Wallet className="w-16 h-16 text-gray-400 mx-auto mb-4" />
             <h2 className="text-2xl font-semibold text-gray-900 mb-2">Connect Your Wallet</h2>
@@ -331,7 +332,7 @@ export default function StakingPage() {
             <div className="bg-white rounded-lg shadow-lg p-6 mb-8">
               <h2 className="text-xl font-semibold mb-4">Choose Staking Duration</h2>
               <div className="grid grid-cols-3 gap-4 mb-6">
-                {[1, 2, 3].map((months) => {
+                {[1, 2, 3].map((months: number) => {
                   const days = months * 30
                   const multiplier = getDurationMultiplier(months)
                   return (
@@ -367,7 +368,7 @@ export default function StakingPage() {
             </div>
 
             {/* User's Referral Code */}
-            {connected && userReferralCode && (
+            {isConnected && userReferralCode && (
               <div className="bg-brand-50 rounded-lg shadow-lg p-6 mb-8 border border-brand-200">
                 <h2 className="text-xl font-semibold mb-4 text-brand-900">Your Referral Code</h2>
                 <div className="flex items-center space-x-3">
@@ -396,7 +397,7 @@ export default function StakingPage() {
               <input
                 type="text"
                 value={referralCode}
-                onChange={(e) => setReferralCode(e.target.value)}
+                onChange={(e: ChangeEvent<HTMLInputElement>) => setReferralCode(e.target.value)}
                 placeholder="Enter referral code from another user"
                 className="w-full max-w-md px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent"
               />
@@ -420,7 +421,7 @@ export default function StakingPage() {
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {nfts.map((nft) => {
+                  {nfts.map((nft: SuiLFGNFT) => {
                     const colors = getTierColorClasses(nft.tier)
                     return (
                       <div
@@ -482,7 +483,7 @@ export default function StakingPage() {
               <input
                 type="text"
                 value={username}
-                onChange={(e) => setUsername(e.target.value)}
+                onChange={(e: ChangeEvent<HTMLInputElement>) => setUsername(e.target.value)}
                 placeholder="Enter your username"
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent"
                 maxLength={20}
@@ -583,7 +584,7 @@ export default function StakingPage() {
               <input
                 type="text"
                 value={verificationCode}
-                onChange={(e) => setVerificationCode(e.target.value)}
+                onChange={(e: ChangeEvent<HTMLInputElement>) => setVerificationCode(e.target.value)}
                 placeholder="Enter verification code if provided"
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent"
               />
