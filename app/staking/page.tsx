@@ -68,7 +68,7 @@ async function fetchKioskNfts(suiClient: SuiClient, ownerAddress: string): Promi
 
               const obj = await suiClient.getObject({ id: heldObjectId, options: { showType: true, showContent: true } })
               const data: any = (obj as any)?.data
-              if (data?.type?.includes(NFT_TYPE)) {
+              if (data?.type?.includes('::governance_nfts::SuiLFG_NFT')) {
                 const nftContent = data.content as any
                 const nftFields = nftContent?.fields || {}
                 const attributes = nftFields.attributes || []
@@ -102,7 +102,7 @@ async function fetchKioskNfts(suiClient: SuiClient, ownerAddress: string): Promi
 }
 
 export default function StakingPage() {
-  const { isConnected, currentWallet } = useCurrentWallet()
+  const { isConnected, currentWallet, disconnect } = useCurrentWallet()
   const [nfts, setNfts] = useState<SuiLFGNFT[]>([])
   const [loading, setLoading] = useState(false)
   const [selectedNft, setSelectedNft] = useState<SuiLFGNFT | null>(null)
@@ -146,7 +146,9 @@ export default function StakingPage() {
         setShowUsernameModal(true)
       }
     } catch (error) {
-      console.error('Error checking user profile:', error)
+      // If fetching profile fails (e.g., RLS), still prompt for username so user can register
+      setIsNewUser(true)
+      setShowUsernameModal(true)
     }
   }
 
@@ -164,23 +166,26 @@ export default function StakingPage() {
     }
   }
 
-  // Handle username creation
+  // Handle username creation via secure API (bypasses RLS with service role)
   const handleCreateUsername = async () => {
     if (!currentWallet || !username.trim()) return
 
     setLoading(true)
     try {
-      const profile = await createUserProfile(currentWallet.accounts[0].address, username.trim())
+      const resp = await fetch('/api/create-profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_wallet: currentWallet.accounts[0].address, username: username.trim() })
+      })
+      const data = await resp.json()
+      if (!resp.ok || !data.success) throw new Error(data.error || 'Failed to create')
+      const profile = data.profile
       setUserReferralCode(profile.referral_code)
       setShowUsernameModal(false)
       setIsNewUser(false)
       toast.success(`Welcome to SuiLFG Staking! Your referral code: ${profile.referral_code}`)
     } catch (error: any) {
-      if (error.code === '23505') { // Unique constraint violation
-        toast.error('Username already taken. Please choose a different one.')
-      } else {
-        toast.error('Failed to create profile. Please try again.')
-      }
+      toast.error(error?.message || 'Failed to create profile')
       console.error('Error creating profile:', error)
     } finally {
       setLoading(false)
@@ -213,7 +218,7 @@ export default function StakingPage() {
         if (stakedIds.has(obj.data?.objectId || '')) continue
         try {
           const objData: any = obj.data
-          if (objData?.type?.includes(NFT_TYPE)) {
+          if (objData?.type?.includes('::governance_nfts::SuiLFG_NFT')) {
             const content = objData.content as any
             const fields = content?.fields || {}
             const attributes = fields.attributes || []
@@ -364,9 +369,14 @@ export default function StakingPage() {
                   Connect Wallet
                 </ConnectButton>
               ) : (
-                <span className="text-sm text-gray-600">
-                  Connected: {currentWallet?.accounts[0]?.address?.slice(0, 6)}...{currentWallet?.accounts[0]?.address?.slice(-4)}
-                </span>
+                <div className="flex items-center gap-3">
+                  <span className="text-sm text-gray-600 hidden sm:inline">
+                    {currentWallet?.accounts[0]?.address?.slice(0, 6)}...{currentWallet?.accounts[0]?.address?.slice(-4)}
+                  </span>
+                  <button onClick={() => disconnect?.()} className="btn-secondary text-sm">
+                    Disconnect
+                  </button>
+                </div>
               )}
             </div>
           </div>
