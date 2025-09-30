@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
 import { useState, useEffect, ChangeEvent } from 'react'
-import { useCurrentWallet, ConnectButton } from '@mysten/dapp-kit'
+import { useCurrentWallet, ConnectButton, useDisconnectWallet } from '@mysten/dapp-kit'
 import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -102,7 +102,8 @@ async function fetchKioskNfts(suiClient: SuiClient, ownerAddress: string): Promi
 }
 
 export default function StakingPage() {
-  const { isConnected, currentWallet, disconnect } = useCurrentWallet()
+  const { isConnected, currentWallet } = useCurrentWallet()
+  const { mutate: disconnect } = useDisconnectWallet()
   const [nfts, setNfts] = useState<SuiLFGNFT[]>([])
   const [loading, setLoading] = useState(false)
   const [selectedNft, setSelectedNft] = useState<SuiLFGNFT | null>(null)
