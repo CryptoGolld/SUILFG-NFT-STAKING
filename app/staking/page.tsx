@@ -39,7 +39,6 @@ const MIN_STAKING_DAYS = 30
 
 export default function StakingPage() {
   const { isConnected, currentWallet } = useCurrentWallet()
-  const { mutate: signAndExecuteTransaction } = useSignAndExecuteTransaction()
   const [nfts, setNfts] = useState<SuiLFGNFT[]>([])
   const [loading, setLoading] = useState(false)
   const [selectedNft, setSelectedNft] = useState<SuiLFGNFT | null>(null)
