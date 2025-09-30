@@ -81,7 +81,7 @@ export default function DashboardPage() {
       // Fetch staked NFTs
       const stakedData = await getUserStakedNFTs(currentWallet.accounts[0].address)
       if (stakedData) {
-        const formattedStakedNfts: StakedNFT[] = stakedData.map(nft => ({
+        const formattedStakedNfts: StakedNFT[] = stakedData.map((nft: any) => ({
           id: nft.id,
           nft_object_id: nft.nft_object_id,
           name: `SuiLFG ${nft.nft_tier} #${nft.nft_object_id.slice(-4)}`,
@@ -102,7 +102,7 @@ export default function DashboardPage() {
         .or('grant_end_time.is.null,grant_end_time.gte.' + new Date().toISOString())
 
       if (grantsData) {
-        const formattedGrants: ManualGrant[] = grantsData.map(grant => ({
+        const formattedGrants: ManualGrant[] = grantsData.map((grant: any) => ({
           id: grant.id,
           reward_tier: grant.reward_tier,
           grant_start_time: grant.grant_start_time,
@@ -115,7 +115,7 @@ export default function DashboardPage() {
       const referralsData = await getUserReferrals(currentWallet.accounts[0].address)
       if (referralsData) {
         const totalReferrals = referralsData.length
-        const confirmedReferrals = referralsData.filter(r => r.status === 'confirmed').length
+        const confirmedReferrals = referralsData.filter((r: any) => r.status === 'confirmed').length
         const pendingReferrals = totalReferrals - confirmedReferrals
 
         setReferrals({
@@ -141,7 +141,7 @@ export default function DashboardPage() {
         .order('forfeited_at', { ascending: false })
 
       if (forfeituresData) {
-        const formattedForfeitures: ForfeitureData[] = forfeituresData.map(forfeiture => ({
+        const formattedForfeitures: ForfeitureData[] = forfeituresData.map((forfeiture: any) => ({
           id: forfeiture.id,
           staked_nft_name: `SuiLFG ${forfeiture.staked_nfts?.[0]?.nft_tier || 'Unknown'}`,
           original_staker_wallet: forfeiture.original_staker_wallet,
