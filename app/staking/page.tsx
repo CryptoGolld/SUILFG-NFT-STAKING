@@ -63,7 +63,19 @@ async function fetchKioskNfts(suiClient: SuiClient, ownerAddress: string): Promi
               // Fetch the dynamic field object to resolve the kiosk item, then extract the held object ID
               const dfo = await suiClient.getDynamicFieldObject({ parentId: kioskId, name: df.name as any })
               const valueFields: any = (dfo as any)?.data?.content?.fields?.value?.fields
-              const heldObjectId: string | undefined = valueFields?.id?.id || valueFields?.object_id || valueFields?.item_id
+              const nameFields: any = (dfo as any)?.data?.content?.fields?.name as any
+              const nameInner: any = nameFields?.fields || nameFields
+
+              const candidates: Array<any> = [
+                valueFields?.id?.id,
+                valueFields?.id,
+                valueFields?.object_id,
+                valueFields?.item_id,
+                nameInner?.id,
+                nameInner?.value,
+                nameInner?.fields?.id
+              ]
+              const heldObjectId: string | undefined = candidates.find((c) => typeof c === 'string' && c.startsWith('0x'))
               if (!heldObjectId || typeof heldObjectId !== 'string' || !heldObjectId.startsWith('0x')) continue
 
               const obj = await suiClient.getObject({ id: heldObjectId, options: { showType: true, showContent: true } })
