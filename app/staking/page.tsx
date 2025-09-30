@@ -3,12 +3,12 @@ export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
 import { useState, useEffect, ChangeEvent } from 'react'
-import { useCurrentWallet } from '@mysten/dapp-kit'
+import { useCurrentWallet, ConnectButton } from '@mysten/dapp-kit'
 import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client'
 import Link from 'next/link'
 import Image from 'next/image'
 import toast from 'react-hot-toast'
-import { ArrowLeft, Wallet, Loader2 } from 'lucide-react'
+import { ArrowLeft, Wallet, Loader2, AlertTriangle } from 'lucide-react'
 import { getUserStakedNFTs, determineNFTTier, getUserProfile, createUserProfile, getUserProfileByWallet } from '@/lib/supabase'
 
 // SuiLFG NFT Contract Details (from project registry)
@@ -36,7 +36,7 @@ const POINTS_PER_HOUR = {
   Council: 300    // Council earn 300 points per hour (50 per 10 minutes)
 }
 
-// Minimum staking duration in days
+// Minimum staking duration in days (1 month)
 const MIN_STAKING_DAYS = 30
 
 export default function StakingPage() {
@@ -54,7 +54,7 @@ export default function StakingPage() {
   const [username, setUsername] = useState('')
   const [isNewUser, setIsNewUser] = useState(false)
 
-  // Duration multipliers for rewards
+  // Duration multipliers for rewards (3 months max, then restake required)
   const getDurationMultiplier = (months: number) => {
     switch (months) {
       case 1: return 1
@@ -325,7 +325,7 @@ export default function StakingPage() {
             <Wallet className="w-16 h-16 text-gray-400 mx-auto mb-4" />
             <h2 className="text-2xl font-semibold text-gray-900 mb-2">Connect Your Wallet</h2>
             <p className="text-gray-600 mb-6">Please connect your Sui wallet to view and stake your NFTs.</p>
-            <button className="btn-primary">Connect Wallet</button>
+            <ConnectButton className="btn-primary" />
           </div>
         ) : (
           <>
@@ -364,6 +364,9 @@ export default function StakingPage() {
               <div className="bg-brand-50 p-3 rounded-lg">
                 <p className="text-sm text-brand-700">
                   <strong>Duration Multipliers:</strong> 1 month = 1x rewards, 2 months = 1.5x rewards, 3 months = 2x rewards
+                </p>
+                <p className="text-sm text-orange-700 mt-2">
+                  <strong>Note:</strong> Maximum staking duration is 3 months. After 3 months, you'll need to restake to continue earning rewards.
                 </p>
               </div>
             </div>
@@ -591,6 +594,25 @@ export default function StakingPage() {
               />
               <p className="text-xs text-gray-500 mt-1">
                 This helps verify your staking transaction.
+              </p>
+            </div>
+
+            {/* Important Warning */}
+            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+              <h3 className="text-sm font-semibold text-red-800 mb-2 flex items-center">
+                <AlertTriangle className="w-4 h-4 mr-2" />
+                Important: Do NOT List, Transfer, or Sell During Staking
+              </h3>
+              <p className="text-sm text-red-700 mb-2">
+                <strong>Warning:</strong> If you list, transfer, or sell your staked NFT before the staking duration ends, you will:
+              </p>
+              <ul className="text-sm text-red-700 list-disc list-inside space-y-1">
+                <li>Lose ALL accumulated staking rewards</li>
+                <li>Forfeit your staking position</li>
+                <li>Not be able to claim any points earned</li>
+              </ul>
+              <p className="text-sm text-red-700 mt-2">
+                <strong>Your NFT must remain in your wallet for the entire staking period.</strong>
               </p>
             </div>
 

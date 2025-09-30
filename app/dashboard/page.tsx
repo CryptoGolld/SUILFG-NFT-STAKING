@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
 import { useState, useEffect } from 'react'
-import { useCurrentWallet } from '@mysten/dapp-kit'
+import { useCurrentWallet, ConnectButton } from '@mysten/dapp-kit'
 import Link from 'next/link'
 import Image from 'next/image'
 import { ArrowLeft, Wallet, Trophy, Coins, Star, Crown, Award, Clock, Users, AlertTriangle } from 'lucide-react'
@@ -236,7 +236,7 @@ export default function DashboardPage() {
             <Wallet className="w-16 h-16 text-gray-400 mx-auto mb-4" />
             <h2 className="text-2xl font-semibold text-gray-900 mb-2">Connect Your Wallet</h2>
             <p className="text-gray-600 mb-6">Please connect your Sui wallet to view your dashboard.</p>
-            <button className="btn-primary">Connect Wallet</button>
+            <ConnectButton className="btn-primary" />
           </div>
         ) : (
           <>

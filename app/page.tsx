@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic'
 export const revalidate = 0
 import Link from 'next/link'
 import Image from 'next/image'
-import { useCurrentWallet } from '@mysten/dapp-kit'
+import { useCurrentWallet, ConnectButton } from '@mysten/dapp-kit'
 import { Coins, Trophy, Users, ExternalLink, Twitter } from 'lucide-react'
 import { getCollectionMetadata } from '@/lib/supabase'
 
@@ -47,9 +47,7 @@ export default function HomePage() {
                 Dashboard
               </Link>
               {!isConnected && (
-                <button className="btn-primary">
-                  Connect Wallet
-                </button>
+                <ConnectButton className="btn-primary" />
               )}
             </div>
           </div>
@@ -88,7 +86,7 @@ export default function HomePage() {
               </div>
               <h3 className="text-xl font-semibold mb-2 text-brand-900">Flexible Staking</h3>
               <p className="text-brand-700">
-                Stake for any duration from 1-365 days. Your NFT stays in your wallet.
+                Stake for any duration from 30-90 days. Your NFT stays in your wallet.
               </p>
             </div>
 
