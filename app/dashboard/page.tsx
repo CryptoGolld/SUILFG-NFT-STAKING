@@ -229,7 +229,7 @@ export default function DashboardPage() {
       </nav>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {!connected ? (
+        {!isConnected ? (
           <div className="text-center py-20">
             <Wallet className="w-16 h-16 text-gray-400 mx-auto mb-4" />
             <h2 className="text-2xl font-semibold text-gray-900 mb-2">Connect Your Wallet</h2>
