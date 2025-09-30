@@ -12,11 +12,25 @@ export async function POST(req: NextRequest) {
 
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
     const serviceRole = process.env.SUPABASE_SERVICE_ROLE_KEY
+    
+    console.log('Supabase URL exists:', !!supabaseUrl)
+    console.log('Service Role exists:', !!serviceRole)
+    console.log('Service Role prefix:', serviceRole?.substring(0, 20))
+    
     if (!supabaseUrl || !serviceRole) {
-      return NextResponse.json({ success: false, error: 'Server not configured' }, { status: 500 })
+      return NextResponse.json({ 
+        success: false, 
+        error: 'Server not configured', 
+        debug: { hasUrl: !!supabaseUrl, hasKey: !!serviceRole }
+      }, { status: 500 })
     }
 
-    const admin = createClient(supabaseUrl, serviceRole)
+    const admin = createClient(supabaseUrl, serviceRole, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false
+      }
+    })
 
     // Generate an 8-char uppercase referral code
     const generateReferralCode = () => {
@@ -35,7 +49,13 @@ export async function POST(req: NextRequest) {
       .single()
 
     if (error) {
-      return NextResponse.json({ success: false, error: error.message }, { status: 400 })
+      console.error('Supabase error:', error)
+      return NextResponse.json({ 
+        success: false, 
+        error: error.message,
+        code: error.code,
+        details: error.details 
+      }, { status: 400 })
     }
 
     return NextResponse.json({ success: true, profile: data })

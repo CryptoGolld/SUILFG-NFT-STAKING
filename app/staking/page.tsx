@@ -48,16 +48,25 @@ async function fetchKioskNfts(suiClient: SuiClient, ownerAddress: string): Promi
       options: { showType: true, showContent: true }
     })
 
+    console.log('Found kiosk owner caps:', ownerCaps.data.length)
+
     for (const cap of ownerCaps.data) {
       try {
         const content = (cap.data as any)?.content
         const fields = content?.fields
         const kioskId: string | undefined = fields?.for?.fields?.id?.id || fields?.for?.id
-        if (!kioskId) continue
+        if (!kioskId) {
+          console.log('No kioskId found in cap')
+          continue
+        }
+
+        console.log('Scanning kiosk:', kioskId)
 
         let cursor: string | null | undefined = null
         do {
           const dfields = await suiClient.getDynamicFields({ parentId: kioskId, cursor: cursor || undefined })
+          console.log('Dynamic fields in kiosk:', dfields.data.length)
+          
           for (const df of dfields.data) {
             try {
               // Fetch the dynamic field object to resolve the kiosk item, then extract the held object ID
@@ -76,15 +85,27 @@ async function fetchKioskNfts(suiClient: SuiClient, ownerAddress: string): Promi
                 nameInner?.fields?.id
               ]
               const heldObjectId: string | undefined = candidates.find((c) => typeof c === 'string' && c.startsWith('0x'))
-              if (!heldObjectId || typeof heldObjectId !== 'string' || !heldObjectId.startsWith('0x')) continue
+              
+              if (!heldObjectId || typeof heldObjectId !== 'string' || !heldObjectId.startsWith('0x')) {
+                console.log('No valid objectId in dynamic field')
+                continue
+              }
+
+              console.log('Checking kiosk item:', heldObjectId)
 
               const obj = await suiClient.getObject({ id: heldObjectId, options: { showType: true, showContent: true } })
               const data: any = (obj as any)?.data
-              if (data?.type?.includes('::governance_nfts::SuiLFG_NFT')) {
+              const objType = data?.type || ''
+              
+              console.log('Kiosk item type:', objType)
+              
+              if (objType.includes('::governance_nfts::SuiLFG_NFT') || objType.includes('SuiLFG_NFT')) {
                 const nftContent = data.content as any
                 const nftFields = nftContent?.fields || {}
                 const attributes = nftFields.attributes || []
                 const votingPower = attributes.find((attr: any) => attr.trait_type === 'Voting Power')?.value || '1.5x'
+
+                console.log('Found SuiLFG NFT in kiosk:', data.objectId, nftFields.name)
 
                 results.push({
                   id: data.objectId,
@@ -110,6 +131,7 @@ async function fetchKioskNfts(suiClient: SuiClient, ownerAddress: string): Promi
   } catch (e) {
     console.warn('Failed to enumerate kiosks:', e)
   }
+  console.log('Total kiosk NFTs found:', results.length)
   return results
 }
 
@@ -224,6 +246,8 @@ export default function StakingPage() {
         options: { showType: true, showContent: true }
       })
 
+      console.log('Total owned objects:', ownedObjects.data.length)
+
       const collected: SuiLFGNFT[] = []
 
       // Parse directly owned NFTs
@@ -231,11 +255,16 @@ export default function StakingPage() {
         if (stakedIds.has(obj.data?.objectId || '')) continue
         try {
           const objData: any = obj.data
-          if (objData?.type?.includes('::governance_nfts::SuiLFG_NFT')) {
+          const objType = objData?.type || ''
+          console.log('Checking object type:', objType)
+          
+          if (objType.includes('::governance_nfts::SuiLFG_NFT') || objType.includes('SuiLFG_NFT')) {
             const content = objData.content as any
             const fields = content?.fields || {}
             const attributes = fields.attributes || []
             const votingPower = attributes.find((attr: any) => attr.trait_type === 'Voting Power')?.value || '1.5x'
+
+            console.log('Found SuiLFG NFT:', objData.objectId, fields.name)
 
             collected.push({
               id: objData.objectId,
@@ -253,14 +282,19 @@ export default function StakingPage() {
         }
       }
 
+      console.log('Direct NFTs found:', collected.length)
+
       // Also load NFTs from any kiosks owned by the user
       const kioskNfts = await fetchKioskNfts(suiClient, currentWallet.accounts[0].address)
+      console.log('Kiosk NFTs found:', kioskNfts.length)
+      
       for (const nft of kioskNfts) {
         if (!stakedIds.has(nft.id)) {
           collected.push(nft)
         }
       }
 
+      console.log('Total NFTs collected:', collected.length)
       setNfts(collected)
     } catch (error) {
       console.error('Failed to fetch NFTs:', error)
