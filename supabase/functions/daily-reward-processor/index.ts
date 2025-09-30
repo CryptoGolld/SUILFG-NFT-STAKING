@@ -437,33 +437,61 @@ serve(async (req) => {
   }
 })
 
-// Helper function to verify NFT ownership and check for marketplace listings
+// Simple JSON-RPC helper
+async function rpc(method: string, params: any[]) {
+  const res = await fetch(SUI_RPC_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params })
+  })
+  if (!res.ok) throw new Error(`RPC ${method} failed: ${res.status}`)
+  const data = await res.json()
+  if (data.error) throw new Error(`RPC ${method} error: ${data.error.message}`)
+  return data.result
+}
+
+// Attempt to detect if a given item is listed inside a kiosk by scanning dynamic fields
+async function isItemListedInKiosk(kioskId: string, nftObjectId: string): Promise<boolean> {
+  try {
+    let cursor: string | null | undefined = null
+    do {
+      const fieldsRes = await rpc('suix_getDynamicFields', [{ parentId: kioskId, cursor: cursor || undefined }])
+      const entries: any[] = fieldsRes?.data || []
+
+      for (const entry of entries) {
+        try {
+          const dfObj = await rpc('suix_getDynamicFieldObject', [{ parentId: kioskId, name: entry.name }])
+          const dtype: string | undefined = dfObj?.data?.type
+          const dcontent: any = dfObj?.data?.content
+          if (!dtype || !dcontent) continue
+
+          // Heuristic: Listing objects typically include "kiosk::Listing"
+          const isListing = dtype.includes('::kiosk::Listing') || dtype.toLowerCase().includes('listing')
+          if (!isListing) continue
+
+          const fields = dcontent.fields || {}
+          // Try several common shapes for linking item to listing
+          const listedId = fields.item_id || fields.itemId || fields.item?.fields?.id || fields.item?.id
+          if (typeof listedId === 'string' && listedId.toLowerCase() === nftObjectId.toLowerCase()) {
+            return true
+          }
+        } catch (_) {
+          // continue scanning
+        }
+      }
+      cursor = fieldsRes?.nextCursor
+    } while (cursor)
+  } catch (_) {
+    // ignore and fall back to not listed
+  }
+  return false
+}
+
+// Verify NFT ownership with kiosk-awareness and basic listing detection
 async function verifyNFTOwnership(nftObjectId: string, expectedOwner: string): Promise<{ isOwned: boolean, isListed: boolean, reason?: string }> {
   try {
-    const response = await fetch(SUI_RPC_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        jsonrpc: '2.0',
-        id: 1,
-        method: 'sui_getObject',
-        params: [nftObjectId, { showOwner: true }]
-      })
-    })
-
-    if (!response.ok) {
-      throw new Error(`Sui RPC request failed: ${response.status}`)
-    }
-
-    const data = await response.json()
-
-    if (data.error) {
-      throw new Error(`Sui RPC error: ${data.error.message}`)
-    }
-
-    const owner = data.result?.data?.owner
+    const obj = await rpc('sui_getObject', [nftObjectId, { showOwner: true }])
+    const owner = obj?.data?.owner
     if (!owner) {
       return { isOwned: false, isListed: false, reason: 'No owner found' }
     }
@@ -487,13 +515,41 @@ async function verifyNFTOwnership(nftObjectId: string, expectedOwner: string): P
     }
 
     if (owner.ObjectOwner) {
-      // For object owners, this could be a kiosk or another contract
-      // Check if it's a known marketplace kiosk
-      const objectOwner = owner.ObjectOwner
+      // Likely a kiosk or contract. Validate kiosk ownership by expected wallet.
+      const kioskId: string = owner.ObjectOwner
 
-      // You could add logic here to check if the object owner is a marketplace kiosk
-      // For now, assume any ObjectOwner means it's not directly owned by the user
-      return { isOwned: false, isListed: true, reason: 'In kiosk or marketplace' }
+      // Fetch all KioskOwnerCaps owned by expectedOwner and check if any matches this kiosk id
+      const caps = await rpc('suix_getOwnedObjects', [
+        expectedOwner,
+        {
+          filter: { StructType: '0x2::kiosk::KioskOwnerCap' },
+          options: { showType: true, showContent: true }
+        }
+      ])
+
+      let ownsKiosk = false
+      for (const it of (caps?.data || [])) {
+        const content = it?.data?.content
+        const forField = content?.fields?.for
+        const capKioskId = forField?.fields?.id?.id || forField?.id
+        if (capKioskId === kioskId) {
+          ownsKiosk = true
+          break
+        }
+      }
+
+      if (ownsKiosk) {
+        // Item is inside user's kiosk; attempt to detect if it is listed
+        const listed = await isItemListedInKiosk(kioskId, nftObjectId)
+        if (listed) return { isOwned: true, isListed: true, reason: 'Kiosk listing found' }
+        return { isOwned: true, isListed: false }
+      }
+
+      // If kiosk not owned by expected user, treat as listed if objectOwner matches known marketplaces
+      if (MARKETPLACE_ADDRESSES.includes(kioskId)) {
+        return { isOwned: false, isListed: true, reason: 'Listed on marketplace kiosk' }
+      }
+      return { isOwned: false, isListed: false, reason: 'Transferred to another kiosk/contract' }
     }
 
     return { isOwned: false, isListed: false, reason: 'Unknown owner type' }

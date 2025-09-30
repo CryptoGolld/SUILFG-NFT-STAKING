@@ -39,6 +39,66 @@ const POINTS_PER_HOUR = {
 // Minimum staking duration in days (1 month)
 const MIN_STAKING_DAYS = 30
 
+async function fetchKioskNfts(suiClient: SuiClient, ownerAddress: string): Promise<SuiLFGNFT[]> {
+  const results: SuiLFGNFT[] = []
+  try {
+    const ownerCaps = await suiClient.getOwnedObjects({
+      owner: ownerAddress,
+      filter: { StructType: '0x2::kiosk::KioskOwnerCap' },
+      options: { showType: true, showContent: true }
+    })
+
+    for (const cap of ownerCaps.data) {
+      try {
+        const content = (cap.data as any)?.content
+        const fields = content?.fields
+        const kioskId: string | undefined = fields?.for?.fields?.id?.id || fields?.for?.id
+        if (!kioskId) continue
+
+        let cursor: string | null | undefined = null
+        do {
+          const dfields = await suiClient.getDynamicFields({ parentId: kioskId, cursor: cursor || undefined })
+          for (const df of dfields.data) {
+            const name: any = df.name as any
+            const objectId: string | undefined = name?.value || name?.id || name?.fields?.id
+            if (!objectId || typeof objectId !== 'string' || !objectId.startsWith('0x')) continue
+
+            try {
+              const obj = await suiClient.getObject({ id: objectId, options: { showType: true, showContent: true } })
+              const data: any = obj.data
+              if (data?.type?.includes(NFT_TYPE)) {
+                const content = data.content as any
+                const fields = content?.fields || {}
+                const attributes = fields.attributes || []
+                const votingPower = attributes.find((attr: any) => attr.trait_type === 'Voting Power')?.value || '1.5x'
+
+                results.push({
+                  id: data.objectId,
+                  name: fields.name || `SuiLFG #${data.objectId.slice(-4)}`,
+                  image: fields.image_url || fields.url || '',
+                  tier: determineNFTTier(fields),
+                  attributes: {
+                    votingPower,
+                    rarity: attributes.find((attr: any) => attr.trait_type === 'Rarity')?.value || 'Common'
+                  }
+                })
+              }
+            } catch (e) {
+              console.warn('Failed to load kiosk item object:', e)
+            }
+          }
+          cursor = dfields.nextCursor
+        } while (cursor)
+      } catch (e) {
+        console.warn('Failed to parse kiosk cap:', e)
+      }
+    }
+  } catch (e) {
+    console.warn('Failed to enumerate kiosks:', e)
+  }
+  return results
+}
+
 export default function StakingPage() {
   const { isConnected, currentWallet } = useCurrentWallet()
   const [nfts, setNfts] = useState<SuiLFGNFT[]>([])
@@ -138,50 +198,50 @@ export default function StakingPage() {
       // Create Sui client for blockchain queries
       const suiClient = new SuiClient({ url: getFullnodeUrl('mainnet') })
 
-      // Get all objects owned by the user
+      // Get objects owned directly by the user (outside kiosks)
       const ownedObjects = await suiClient.getOwnedObjects({
         owner: currentWallet.accounts[0].address,
         options: { showType: true, showContent: true }
       })
 
-      // Filter for SuiLFG NFTs and parse them
-      const suiLFGNfts: SuiLFGNFT[] = []
+      const collected: SuiLFGNFT[] = []
 
+      // Parse directly owned NFTs
       for (const obj of ownedObjects.data) {
         if (stakedIds.has(obj.data?.objectId || '')) continue
-
         try {
-          const objData = obj.data
+          const objData: any = obj.data
           if (objData?.type?.includes(NFT_TYPE)) {
             const content = objData.content as any
-            if (content?.fields) {
-              const fields = content.fields
+            const fields = content?.fields || {}
+            const attributes = fields.attributes || []
+            const votingPower = attributes.find((attr: any) => attr.trait_type === 'Voting Power')?.value || '1.5x'
 
-              // Determine tier using the utility function
-              const tier = determineNFTTier(fields)
-
-              // Extract attributes based on SuiLFG contract structure
-              const attributes = fields.attributes || []
-              const votingPower = attributes.find((attr: any) => attr.trait_type === 'Voting Power')?.value || '1.5x'
-
-              suiLFGNfts.push({
-                id: objData.objectId,
-                name: fields.name || `SuiLFG ${tier} #${objData.objectId.slice(-4)}`,
-                image: fields.image_url || fields.url || '',
-                tier,
-                attributes: {
-                  votingPower,
-                  rarity: attributes.find((attr: any) => attr.trait_type === 'Rarity')?.value || 'Common'
-                }
-              })
-            }
+            collected.push({
+              id: objData.objectId,
+              name: fields.name || `SuiLFG #${objData.objectId.slice(-4)}`,
+              image: fields.image_url || fields.url || '',
+              tier: determineNFTTier(fields),
+              attributes: {
+                votingPower,
+                rarity: attributes.find((attr: any) => attr.trait_type === 'Rarity')?.value || 'Common'
+              }
+            })
           }
         } catch (error) {
-          console.error('Error parsing NFT:', error)
+          console.error('Error parsing direct NFT:', error)
         }
       }
 
-      setNfts(suiLFGNfts)
+      // Also load NFTs from any kiosks owned by the user
+      const kioskNfts = await fetchKioskNfts(suiClient, currentWallet.accounts[0].address)
+      for (const nft of kioskNfts) {
+        if (!stakedIds.has(nft.id)) {
+          collected.push(nft)
+        }
+      }
+
+      setNfts(collected)
     } catch (error) {
       console.error('Failed to fetch NFTs:', error)
       toast.error('Failed to fetch NFTs from wallet')

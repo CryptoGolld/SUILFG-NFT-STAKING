@@ -1,8 +1,9 @@
 'use client'
 
 import './globals.css'
+import '@mysten/dapp-kit/dist/index.css'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { SuiClientProvider, WalletProvider } from '@mysten/dapp-kit'
+import { SuiClientProvider, WalletProvider, createNetworkConfig } from '@mysten/dapp-kit'
 import { getFullnodeUrl } from '@mysten/sui.js/client'
 import { Toaster } from 'react-hot-toast'
 
@@ -17,13 +18,13 @@ export default function RootLayout({
     <html lang="en">
       <body>
         <QueryClientProvider client={queryClient}>
-          <SuiClientProvider
-            networks={{
+          {(() => {
+            const { networkConfig } = createNetworkConfig({
               mainnet: { url: getFullnodeUrl('mainnet') },
               testnet: { url: getFullnodeUrl('testnet') },
-            }}
-            defaultNetwork="mainnet"
-          >
+            })
+            return (
+              <SuiClientProvider networks={networkConfig} defaultNetwork="mainnet">
             <WalletProvider
               autoConnect={false}
               storageKey="sui-wallet"
@@ -31,7 +32,9 @@ export default function RootLayout({
               {children}
               <Toaster position="top-right" />
             </WalletProvider>
-          </SuiClientProvider>
+              </SuiClientProvider>
+            )
+          })()}
         </QueryClientProvider>
       </body>
     </html>

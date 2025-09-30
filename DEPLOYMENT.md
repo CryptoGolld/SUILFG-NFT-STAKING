@@ -60,13 +60,25 @@
    supabase functions deploy get-manual-grants
    ```
 
-5. **Set Up Cron Jobs**:
+5. **Set Up Cron Jobs (Edge Scheduler)**:
    ```bash
-   # Daily reward processor (runs every 24 hours at midnight UTC)
-   supabase functions schedule daily-reward-processor --cron "0 0 * * *"
+   # Rewards are computed in 10-minute increments. Run every 10 minutes:
+   supabase functions schedule daily-reward-processor --cron "*/10 * * * *"
 
-   # Referral confirmation (runs every 24 hours at 1 AM UTC)
+   # Referral confirmation can remain daily at 1 AM UTC:
    supabase functions schedule confirm-referrals --cron "0 1 * * *"
+   ```
+
+6. **Verify & Manage Schedules**:
+   ```bash
+   # List all schedules
+   supabase functions schedule list
+
+   # Update an existing schedule cadence (example: change to every 5 minutes)
+   supabase functions schedule daily-reward-processor --cron "*/5 * * * *"
+
+   # Remove a schedule (if needed)
+   supabase functions schedule remove daily-reward-processor
    ```
 
 ## 🌐 Step 2: Vercel Deployment
@@ -166,6 +178,17 @@ const nextConfig = {
    ```
 
 2. **Check Database**:
+3. **Manually Invoke Scheduled Functions (One-Off)**:
+   ```bash
+   # Invoke daily-reward-processor once (useful for testing)
+   supabase functions invoke daily-reward-processor --no-verify-jwt --body '{"dryRun": false}'
+
+   # Or via HTTP (replace <project-ref>)
+   curl -X POST "https://<project-ref>.supabase.co/functions/v1/daily-reward-processor" \
+     -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+     -H "Content-Type: application/json" \
+     -d '{"dryRun": false}'
+   ```
    - Verify tables are created in Supabase Dashboard > Table Editor
    - Check Row Level Security policies are active
 
