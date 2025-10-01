@@ -41,6 +41,15 @@ serve(async (req) => {
     }
 
     const body: StakeRequest = await req.json()
+    console.log('Stake request payload (redacted where applicable):', {
+      user_wallet: body.user_wallet,
+      nft_object_id: body.nft_object_id,
+      nft_tier: body.nft_tier,
+      staking_duration_days: body.staking_duration_days,
+      stake_duration_months: body.stake_duration_months,
+      referral_code_used: body.referral_code_used,
+      verification_code: body.verification_code
+    })
 
     // Validate required fields
     const { user_wallet, nft_object_id, nft_tier, staking_duration_days, stake_duration_months, referral_code_used, verification_code } = body
@@ -97,6 +106,11 @@ serve(async (req) => {
       if (!profileErr && profile?.user_wallet) {
         referrerWallet = profile.user_wallet
       }
+      console.log('Referral resolution:', {
+        referral_code_used,
+        resolved_referrer_wallet: referrerWallet || null,
+        profileErr: profileErr ? profileErr.message : null
+      })
 
       // Prevent re-use: this NFT with this referrer before
       const { data: existingNftReferral } = await supabaseClient
@@ -134,10 +148,25 @@ serve(async (req) => {
       }
 
       referralId = referralData.id
+        console.log('Created referral record:', { referralId, referrer_wallet: referrerWallet })
       }
     }
 
     // Insert new stake record
+    console.log('About to insert staked_nfts row:', {
+      user_wallet,
+      nft_object_id,
+      nft_tier,
+      staking_duration_days,
+      stake_duration_months,
+      stake_start_time: stakeStartTime.toISOString(),
+      stake_end_time: stakeEndTimeISO,
+      referral_code_used: referral_code_used || null,
+      verification_code: verification_code || null,
+      referral_id: referralId,
+      status: 'active'
+    })
+
     const { data: stakeData, error: stakeError } = await supabaseClient
       .from('staked_nfts')
       .insert({
@@ -160,6 +189,7 @@ serve(async (req) => {
     if (stakeError) {
       throw new Error(`Failed to create stake: ${stakeError.message}`)
     }
+    console.log('Inserted stake row:', { stake_id: stakeData.id, referral_id: referralId })
 
     // Update the referral record with the staked_nft_id
     if (referralId) {
