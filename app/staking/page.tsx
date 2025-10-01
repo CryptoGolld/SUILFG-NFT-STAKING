@@ -24,6 +24,7 @@ interface SuiLFGNFT {
   attributes: { rarity: string; votingPower: string }
   isListed?: boolean
   listingPrice?: string
+  isStaked?: boolean
 }
 
 const TIER_COLORS = {
@@ -246,6 +247,10 @@ export default function StakingPage() {
         return '1.5x'
       }
 
+      // Fetch staked to mark in UI
+      const stakedList = await getUserStakedNFTs(currentWallet.accounts[0].address)
+      const stakedIdSet = new Set<string>((stakedList || []).map((s: any) => s.nft_object_id))
+
       // Parse directly owned NFTs
       for (const obj of ownedObjects.data) {
         if (stakedIds.has(obj.data?.objectId || '')) continue
@@ -270,7 +275,8 @@ export default function StakingPage() {
                 votingPower,
                 rarity: (fields?.attributes || []).find((attr: any) => (attr?.trait_type || attr?.traitType || attr?.key || '').toString().toLowerCase() === 'rarity')?.value || 'Common'
               },
-              isListed: false
+              isListed: false,
+              isStaked: stakedIdSet.has(objData.objectId)
             })
           }
         } catch (error) {
@@ -312,7 +318,8 @@ export default function StakingPage() {
                     rarity: (fields?.attributes || []).find((attr: any) => (attr?.trait_type || attr?.traitType || attr?.key || '').toString().toLowerCase() === 'rarity')?.value || 'Common'
                   },
                   isListed,
-                  listingPrice: price ? String(price) : undefined
+                  listingPrice: price ? String(price) : undefined,
+                  isStaked: stakedIdSet.has(objectId)
                 })
               }
             } catch {}
@@ -609,6 +616,11 @@ export default function StakingPage() {
                                 Listed{nft.listingPrice ? ` • ${nft.listingPrice}` : ''}
                               </span>
                             )}
+                            {nft.isStaked && (
+                              <span className="ml-2 text-xs px-2 py-0.5 rounded bg-green-100 text-green-800 whitespace-nowrap">
+                                Staked
+                              </span>
+                            )}
                           </div>
                           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-3 gap-2">
                             <div className="flex flex-col">
@@ -703,6 +715,7 @@ export default function StakingPage() {
                 <div className="min-w-0 flex-1">
                   <h3 className="font-semibold truncate">{selectedNft.name}</h3>
                   <p className="text-sm text-gray-600 capitalize">{selectedNft.tier} Tier</p>
+                  <p className="text-xs text-gray-500 break-all">ID: {selectedNft.id}</p>
                   <p className="text-xs text-brand-600 mt-1">
                     {selectedNft.attributes.votingPower} voting power
                   </p>
