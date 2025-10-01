@@ -10,7 +10,8 @@ export async function POST(request: NextRequest) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.SUPABASE_ANON_KEY}`,
+        // Use shared secret header to authorize backend
+        'x-stake-api-secret': process.env.STAKE_API_SECRET || '',
       },
       body: JSON.stringify({
         user_wallet,
