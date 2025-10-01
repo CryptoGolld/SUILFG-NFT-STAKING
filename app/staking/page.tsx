@@ -401,7 +401,6 @@ export default function StakingPage() {
             staking_duration_days: stakingDuration,
             stake_duration_months: stakingMonths,
             referral_code_used: referralCode || undefined,
-            verification_code: verificationCode || undefined,
             signed_message: signMessage
           })
         })
