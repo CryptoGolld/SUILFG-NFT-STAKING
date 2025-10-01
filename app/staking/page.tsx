@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
 import { useState, useEffect, ChangeEvent } from 'react'
-import { useCurrentWallet, ConnectButton, useDisconnectWallet } from '@mysten/dapp-kit'
+import { useCurrentWallet, ConnectButton, useDisconnectWallet, useSignPersonalMessage } from '@mysten/dapp-kit'
 import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client'
 import { KioskClient, Network } from '@mysten/kiosk'
 import Link from 'next/link'
@@ -108,6 +108,7 @@ async function fetchKioskNfts(suiClient: SuiClient, ownerAddress: string): Promi
 export default function StakingPage() {
   const { isConnected, currentWallet } = useCurrentWallet()
   const { mutate: disconnect } = useDisconnectWallet()
+  const { mutateAsync: signPersonalMessage } = useSignPersonalMessage()
   // Signature prompt will be added after upgrading wallet SDK to expose a compatible sign hook
   const [nfts, setNfts] = useState<SuiLFGNFT[]>([])
   const [loading, setLoading] = useState(false)
@@ -377,23 +378,12 @@ export default function StakingPage() {
       const signedMessage = JSON.stringify(payload)
       const messageBytes = new TextEncoder().encode(signedMessage)
 
-      // Attempt to sign via wallet standard features exposed by dapp-kit
+      // Request wallet signature using dapp-kit's hook (prompts the wallet UI)
       let signatureBase64: string | undefined
       try {
-        const anyWallet: any = currentWallet
-        const features = anyWallet?.features || {}
-        if (features['sui:signPersonalMessage']?.signPersonalMessage) {
-          const res = await features['sui:signPersonalMessage'].signPersonalMessage({ message: messageBytes })
-          signatureBase64 = res?.signature || res?.signatureBase64
-        } else if (features['sui:signMessage']?.signMessage) {
-          const res = await features['sui:signMessage'].signMessage({ message: messageBytes })
-          signatureBase64 = res?.signature || res?.signatureBase64
-        }
-      } catch (err) {
-        // fallthrough to error handling below
-      }
-
-      if (!signatureBase64) {
+        const res: any = await signPersonalMessage({ message: messageBytes })
+        signatureBase64 = res?.signature || res?.signatureBase64
+      } catch (_) {
         toast.error('Wallet signature required to stake')
         return
       }
