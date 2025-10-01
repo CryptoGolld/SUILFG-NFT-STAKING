@@ -23,26 +23,18 @@ serve(async (req) => {
   }
 
   try {
+    // Authorize calls using a shared secret header instead of user JWT
+    const requestSecret = req.headers.get('x-stake-api-secret') || req.headers.get('X-Stake-Api-Secret')
+    const serverSecret = Deno.env.get('STAKE_API_SECRET')
+    if (!serverSecret || requestSecret !== serverSecret) {
+      throw new Error('Unauthorized')
+    }
+
+    // Use service role for controlled backend writes
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      {
-        global: {
-          headers: { Authorization: req.headers.get('Authorization')! },
-        },
-      }
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
-
-    // Get the user from the auth token
-    const authHeader = req.headers.get('Authorization')
-    if (!authHeader) {
-      throw new Error('No authorization header')
-    }
-
-    const { data: { user }, error: authError } = await supabaseClient.auth.getUser()
-    if (authError || !user) {
-      throw new Error('Invalid authorization')
-    }
 
     if (req.method !== 'POST') {
       throw new Error('Method not allowed')
@@ -75,9 +67,9 @@ serve(async (req) => {
       throw new Error(`Staking duration days (${staking_duration_days}) doesn't match months (${stake_duration_months})`)
     }
 
-    // Verify the user_wallet matches the authenticated user
-    if (user_wallet !== user.user_metadata?.wallet_address) {
-      throw new Error('Wallet address does not match authenticated user')
+    // No user JWT; ensure a wallet is provided
+    if (!user_wallet) {
+      throw new Error('Missing wallet address')
     }
 
     // Check if NFT is already staked
@@ -93,16 +85,26 @@ serve(async (req) => {
 
     // Re-use check: Check if this NFT has been used in a confirmed referral before for the same referrer
     let referralId = null
+    let referrerWallet: string | null = null
     if (referral_code_used) {
-      // Check if this specific NFT + referrer combination has been used before
-      // Look for any staked_nft record with this NFT and referrer combination
+      // Resolve referral code to referrer wallet
+      const { data: profile, error: profileErr } = await supabaseClient
+        .from('user_profiles')
+        .select('user_wallet, referral_code')
+        .eq('referral_code', referral_code_used)
+        .single()
+      if (profileErr || !profile?.user_wallet) {
+        throw new Error('Invalid referral code')
+      }
+      referrerWallet = profile.user_wallet
+
+      // Prevent re-use: this NFT with this referrer before
       const { data: existingNftReferral } = await supabaseClient
         .from('staked_nfts')
         .select('id, referral_id')
         .eq('nft_object_id', nft_object_id)
         .eq('referral_code_used', referral_code_used)
         .single()
-
       if (existingNftReferral) {
         throw new Error('This NFT has already been used for a referral with this referrer')
       }
@@ -114,11 +116,11 @@ serve(async (req) => {
     const stakeEndTimeISO = stakeEndTime.toISOString()
 
     // If referral code was used, create referral record first
-    if (referral_code_used) {
+    if (referral_code_used && referrerWallet) {
       const { data: referralData, error: referralError } = await supabaseClient
         .from('referrals')
         .insert({
-          referrer_wallet: referral_code_used,
+          referrer_wallet: referrerWallet,
           status: 'pending'
         })
         .select()
