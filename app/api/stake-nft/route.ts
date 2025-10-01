@@ -28,6 +28,8 @@ export async function POST(request: NextRequest) {
         'Content-Type': 'application/json',
         // Use shared secret header to authorize backend
         'x-stake-api-secret': stakeSecret,
+        // Backward-compat: include Authorization for older function versions
+        'Authorization': `Bearer ${process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''}`,
       },
       body: JSON.stringify({
         user_wallet,
