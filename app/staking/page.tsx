@@ -593,13 +593,13 @@ export default function StakingPage() {
                     return (
                       <div
                         key={nft.id}
-                        onClick={() => !nft.isListed && setSelectedNft(nft)}
+                        onClick={() => !nft.isListed && !nft.isStaked && setSelectedNft(nft)}
                         role="button"
                         tabIndex={0}
                         onKeyDown={(e) => {
-                          if ((e.key === 'Enter' || e.key === ' ') && !nft.isListed) setSelectedNft(nft)
+                          if ((e.key === 'Enter' || e.key === ' ') && !nft.isListed && !nft.isStaked) setSelectedNft(nft)
                         }}
-                        className={`border-2 ${colors.border} ${colors.bg} rounded-lg overflow-hidden hover:shadow-lg transition-shadow ${nft.isListed ? '' : 'cursor-pointer'}`}
+                        className={`border-2 ${colors.border} ${colors.bg} rounded-lg overflow-hidden hover:shadow-lg transition-shadow ${(!nft.isListed && !nft.isStaked) ? 'cursor-pointer' : ''}`}
                       >
                         <div className="aspect-square bg-gray-200">
                           <img
@@ -636,11 +636,11 @@ export default function StakingPage() {
                             </span>
                           </div>
                           <button
-                            onClick={() => !nft.isListed && setSelectedNft(nft)}
-                            disabled={Boolean(nft.isListed)}
-                            className={`w-full ${nft.isListed ? 'bg-gray-300 cursor-not-allowed' : colors.button} text-white py-2 px-3 sm:px-4 rounded-lg font-medium transition-colors text-sm`}
+                            onClick={() => !nft.isListed && !nft.isStaked && setSelectedNft(nft)}
+                            disabled={Boolean(nft.isListed || nft.isStaked)}
+                            className={`w-full ${(nft.isListed || nft.isStaked) ? 'bg-gray-300 cursor-not-allowed' : colors.button} text-white py-2 px-3 sm:px-4 rounded-lg font-medium transition-colors text-sm`}
                           >
-                            {nft.isListed ? 'Unlist to Stake' : `Stake for ${stakingDuration} Days`}
+                            {nft.isListed ? 'Unlist to Stake' : (nft.isStaked ? 'Already Staked' : `Stake for ${stakingDuration} Days`)}
                           </button>
                         </div>
                       </div>
