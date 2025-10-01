@@ -25,7 +25,8 @@ export async function POST(req: NextRequest) {
       admin.from('staking_rewards').select('*').eq('user_wallet', user_wallet).single(),
       admin.from('staked_nfts').select('*').eq('user_wallet', user_wallet).order('created_at', { ascending: false }),
       admin.from('manual_reward_grants').select('*').eq('user_wallet', user_wallet).eq('status', 'active').or('grant_end_time.is.null,grant_end_time.gte.' + new Date().toISOString()),
-      admin.from('referrals').select('*, staked_nfts!inner(nft_tier)').eq('referrer_wallet', user_wallet),
+      // Left join so referrals without staked_nft_id (yet) are still returned
+      admin.from('referrals').select('*, staked_nfts(nft_tier)').eq('referrer_wallet', user_wallet),
       admin.from('forfeitures').select('id, staked_nft_id, original_staker_wallet, forfeiture_reason, forfeited_at, staked_nfts!inner(nft_tier)').eq('referrer_wallet', user_wallet).order('forfeited_at', { ascending: false })
     ])
 

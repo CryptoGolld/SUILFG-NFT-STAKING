@@ -760,21 +760,35 @@ export default function StakingPage() {
               </div>
             </div>
 
-            {/* Verification Code Input */}
-            <div className="mb-6">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Verification Code (Optional)
-              </label>
-              <input
-                type="text"
-                value={verificationCode}
-                onChange={(e: ChangeEvent<HTMLInputElement>) => setVerificationCode(e.target.value)}
-                placeholder="Enter verification code if provided"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent"
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                This helps verify your staking transaction.
-              </p>
+            {/* Referral + Verification Inputs (synced with top-level referralCode) */}
+            <div className="mb-6 grid grid-cols-1 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Referral Code (Optional)
+                </label>
+                <input
+                  type="text"
+                  value={referralCode}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) => setReferralCode(e.target.value)}
+                  placeholder="Enter referral code"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Verification Code (Optional)
+                </label>
+                <input
+                  type="text"
+                  value={verificationCode}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) => setVerificationCode(e.target.value)}
+                  placeholder="Enter verification code if provided"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  This helps verify your staking transaction.
+                </p>
+              </div>
             </div>
 
             {/* Important Warning */}
