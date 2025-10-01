@@ -584,7 +584,13 @@ export default function StakingPage() {
                     return (
                       <div
                         key={nft.id}
-                        className={`border-2 ${colors.border} ${colors.bg} rounded-lg overflow-hidden hover:shadow-lg transition-shadow`}
+                        onClick={() => !nft.isListed && setSelectedNft(nft)}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e) => {
+                          if ((e.key === 'Enter' || e.key === ' ') && !nft.isListed) setSelectedNft(nft)
+                        }}
+                        className={`border-2 ${colors.border} ${colors.bg} rounded-lg overflow-hidden hover:shadow-lg transition-shadow ${nft.isListed ? '' : 'cursor-pointer'}`}
                       >
                         <div className="aspect-square bg-gray-200">
                           <img

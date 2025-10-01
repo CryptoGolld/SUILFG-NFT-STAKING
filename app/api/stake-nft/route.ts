@@ -6,12 +6,28 @@ export async function POST(request: NextRequest) {
     const { user_wallet, nft_object_id, nft_tier, staking_duration_days, stake_duration_months, referral_code_used, verification_code } = body
 
     // Call Supabase Edge Function
-    const response = await fetch(`${process.env.SUPABASE_URL}/functions/v1/stake-nft`, {
+    const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL
+    const stakeSecret = process.env.STAKE_API_SECRET || ''
+
+    if (!supabaseUrl) {
+      return NextResponse.json(
+        { error: 'Server not configured: SUPABASE_URL missing' },
+        { status: 500 }
+      )
+    }
+    if (!stakeSecret) {
+      return NextResponse.json(
+        { error: 'Server not configured: STAKE_API_SECRET missing' },
+        { status: 500 }
+      )
+    }
+
+    const response = await fetch(`${supabaseUrl}/functions/v1/stake-nft`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         // Use shared secret header to authorize backend
-        'x-stake-api-secret': process.env.STAKE_API_SECRET || '',
+        'x-stake-api-secret': stakeSecret,
       },
       body: JSON.stringify({
         user_wallet,

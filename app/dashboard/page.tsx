@@ -68,20 +68,24 @@ export default function DashboardPage() {
 
     setLoading(true)
     try {
-      // Fetch rewards
-      const rewardsData = await getUserRewards(currentWallet.accounts[0].address)
-      if (rewardsData) {
+      const resp = await fetch('/api/dashboard', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_wallet: currentWallet.accounts[0].address })
+      })
+      const data = await resp.json()
+      if (!resp.ok || !data.success) throw new Error(data.error || 'Failed to load dashboard')
+
+      if (data.rewards) {
         setRewards({
-          council_points: rewardsData.council_points || 0,
-          governor_points: rewardsData.governor_points || 0,
-          voter_points: rewardsData.voter_points || 0
+          council_points: data.rewards.council_points || 0,
+          governor_points: data.rewards.governor_points || 0,
+          voter_points: data.rewards.voter_points || 0
         })
       }
 
-      // Fetch staked NFTs
-      const stakedData = await getUserStakedNFTs(currentWallet.accounts[0].address)
-      if (stakedData) {
-        const formattedStakedNfts: StakedNFT[] = stakedData.map((nft: any) => ({
+      if (Array.isArray(data.staked)) {
+        const formattedStakedNfts: StakedNFT[] = data.staked.map((nft: any) => ({
           id: nft.id,
           nft_object_id: nft.nft_object_id,
           name: `SuiLFG ${nft.nft_tier} #${nft.nft_object_id.slice(-4)}`,
@@ -93,16 +97,8 @@ export default function DashboardPage() {
         setStakedNfts(formattedStakedNfts)
       }
 
-      // Fetch manual grants
-      const { data: grantsData } = await getSupabase()
-        .from('manual_reward_grants')
-        .select('*')
-        .eq('user_wallet', currentWallet.accounts[0].address)
-        .eq('status', 'active')
-        .or('grant_end_time.is.null,grant_end_time.gte.' + new Date().toISOString())
-
-      if (grantsData) {
-        const formattedGrants: ManualGrant[] = grantsData.map((grant: any) => ({
+      if (Array.isArray(data.grants)) {
+        const formattedGrants: ManualGrant[] = data.grants.map((grant: any) => ({
           id: grant.id,
           reward_tier: grant.reward_tier,
           grant_start_time: grant.grant_start_time,
@@ -111,37 +107,21 @@ export default function DashboardPage() {
         setManualGrants(formattedGrants)
       }
 
-      // Fetch referrals
-      const referralsData = await getUserReferrals(currentWallet.accounts[0].address)
-      if (referralsData) {
-        const totalReferrals = referralsData.length
-        const confirmedReferrals = referralsData.filter((r: any) => r.status === 'confirmed').length
+      if (Array.isArray(data.referrals)) {
+        const totalReferrals = data.referrals.length
+        const confirmedReferrals = data.referrals.filter((r: any) => r.status === 'confirmed').length
         const pendingReferrals = totalReferrals - confirmedReferrals
 
         setReferrals({
           totalReferrals,
           confirmedReferrals,
           pendingReferrals,
-          nextRewardAt: 3 // This could be dynamic based on your reward logic
+          nextRewardAt: 3
         })
       }
 
-      // Fetch forfeitures (stakes that were forfeited by users who used this user's referral code)
-      const { data: forfeituresData } = await getSupabase()
-        .from('forfeitures')
-        .select(`
-          id,
-          staked_nft_id,
-          original_staker_wallet,
-          forfeiture_reason,
-          forfeited_at,
-          staked_nfts!inner(nft_tier)
-        `)
-        .eq('referrer_wallet', currentWallet.accounts[0].address)
-        .order('forfeited_at', { ascending: false })
-
-      if (forfeituresData) {
-        const formattedForfeitures: ForfeitureData[] = forfeituresData.map((forfeiture: any) => ({
+      if (Array.isArray(data.forfeitures)) {
+        const formattedForfeitures: ForfeitureData[] = data.forfeitures.map((forfeiture: any) => ({
           id: forfeiture.id,
           staked_nft_name: `SuiLFG ${forfeiture.staked_nfts?.[0]?.nft_tier || 'Unknown'}`,
           original_staker_wallet: forfeiture.original_staker_wallet,
