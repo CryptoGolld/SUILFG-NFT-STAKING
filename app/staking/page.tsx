@@ -22,6 +22,8 @@ interface SuiLFGNFT {
   image: string
   tier: 'Voter' | 'Governor' | 'Council'
   attributes: { rarity: string; votingPower: string }
+  isListed?: boolean
+  listingPrice?: string
 }
 
 const TIER_COLORS = {
@@ -142,7 +144,9 @@ export default function StakingPage() {
     if (!currentWallet) return
 
     try {
-      const profile = await getUserProfile(currentWallet.accounts[0].address)
+      const resp = await fetch(`/api/create-profile?user_wallet=${currentWallet.accounts[0].address}`)
+      const data = await resp.json()
+      const profile = data?.profile
       if (!profile) {
         setIsNewUser(true)
         setShowUsernameModal(true)
@@ -159,7 +163,8 @@ export default function StakingPage() {
     if (!currentWallet) return
 
     try {
-      const profile = await getUserProfileByWallet(currentWallet.accounts[0].address)
+      const resp = await fetch(`/api/create-profile?user_wallet=${currentWallet.accounts[0].address}`)
+      const { profile } = await resp.json()
       if (profile?.referral_code) {
         setUserReferralCode(profile.referral_code)
       }
@@ -222,6 +227,24 @@ export default function StakingPage() {
         const base = (t || '').split('<')[0]
         return base === NFT_TYPE
       }
+      const parseVotingPower = (fields: any): string => {
+        const attributes = fields?.attributes || []
+        // Support different attribute shapes
+        const candidates = Array.isArray(attributes) ? attributes : []
+        const match = candidates.find((attr: any) => {
+          const key = (attr?.trait_type || attr?.traitType || attr?.key || attr?.name || '').toString().toLowerCase()
+          return key.includes('voting') && key.includes('power')
+        })
+        let value = match?.value
+        if (typeof value === 'number') return `${value}x`
+        if (typeof value === 'string') return value
+        // Fallback by tier
+        const nameLower = (fields?.name || '').toString().toLowerCase()
+        if (nameLower.includes('council')) return '25x'
+        if (nameLower.includes('governor')) return '5x'
+        if (nameLower.includes('voter')) return '1.5x'
+        return '1.5x'
+      }
 
       // Parse directly owned NFTs
       for (const obj of ownedObjects.data) {
@@ -234,8 +257,7 @@ export default function StakingPage() {
           if (isSuiLFGType(objType)) {
             const content = objData.content as any
             const fields = content?.fields || {}
-            const attributes = fields.attributes || []
-            const votingPower = attributes.find((attr: any) => attr.trait_type === 'Voting Power')?.value || '1.5x'
+            const votingPower = parseVotingPower(fields)
 
             console.log('Found SuiLFG NFT:', objData.objectId, fields.name)
 
@@ -246,8 +268,9 @@ export default function StakingPage() {
               tier: determineNFTTier(fields),
               attributes: {
                 votingPower,
-                rarity: attributes.find((attr: any) => attr.trait_type === 'Rarity')?.value || 'Common'
-              }
+                rarity: (fields?.attributes || []).find((attr: any) => (attr?.trait_type || attr?.traitType || attr?.key || '').toString().toLowerCase() === 'rarity')?.value || 'Common'
+              },
+              isListed: false
             })
           }
         } catch (error) {
@@ -275,9 +298,10 @@ export default function StakingPage() {
                 const objData: any = it.data
                 const content: any = objData?.content
                 const fields: any = content?.fields || {}
-                const attributes = fields.attributes || []
-                const votingPower = attributes.find((attr: any) => attr.trait_type === 'Voting Power')?.value || '1.5x'
+                const votingPower = parseVotingPower(fields)
                 const objectId: string = (objData?.objectId as string) || fields?.id || ''
+                const isListed = Boolean((it as any)?.listing)
+                const price = (it as any)?.listing?.price
                 results.push({
                   id: objectId,
                   name: fields.name || `SuiLFG #${(objectId || '').slice(-4)}`,
@@ -285,8 +309,10 @@ export default function StakingPage() {
                   tier: determineNFTTier(fields),
                   attributes: {
                     votingPower,
-                    rarity: attributes.find((attr: any) => attr.trait_type === 'Rarity')?.value || 'Common'
-                  }
+                    rarity: (fields?.attributes || []).find((attr: any) => (attr?.trait_type || attr?.traitType || attr?.key || '').toString().toLowerCase() === 'rarity')?.value || 'Common'
+                  },
+                  isListed,
+                  listingPrice: price ? String(price) : undefined
                 })
               }
             } catch {}
@@ -568,7 +594,14 @@ export default function StakingPage() {
                           />
                         </div>
                         <div className="p-3 sm:p-4">
-                          <h3 className="font-semibold text-base sm:text-lg mb-1 truncate">{nft.name}</h3>
+                          <div className="flex items-center justify-between mb-1">
+                            <h3 className="font-semibold text-base sm:text-lg truncate">{nft.name}</h3>
+                            {nft.isListed && (
+                              <span className="ml-2 text-xs px-2 py-0.5 rounded bg-yellow-100 text-yellow-800 whitespace-nowrap">
+                                Listed{nft.listingPrice ? ` • ${nft.listingPrice}` : ''}
+                              </span>
+                            )}
+                          </div>
                           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-3 gap-2">
                             <div className="flex flex-col">
                               <span className={`px-2 py-1 rounded text-xs font-medium ${colors.text} bg-white w-fit`}>
@@ -583,10 +616,11 @@ export default function StakingPage() {
                             </span>
                           </div>
                           <button
-                            onClick={() => setSelectedNft(nft)}
-                            className={`w-full ${colors.button} text-white py-2 px-3 sm:px-4 rounded-lg font-medium transition-colors text-sm`}
+                            onClick={() => !nft.isListed && setSelectedNft(nft)}
+                            disabled={Boolean(nft.isListed)}
+                            className={`w-full ${nft.isListed ? 'bg-gray-300 cursor-not-allowed' : colors.button} text-white py-2 px-3 sm:px-4 rounded-lg font-medium transition-colors text-sm`}
                           >
-                            Stake for {stakingDuration} Days
+                            {nft.isListed ? 'Unlist to Stake' : `Stake for ${stakingDuration} Days`}
                           </button>
                         </div>
                       </div>
