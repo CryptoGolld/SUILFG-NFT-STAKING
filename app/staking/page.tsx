@@ -116,7 +116,6 @@ export default function StakingPage() {
   const [stakingMonths, setStakingMonths] = useState(1)
   const [referralCode, setReferralCode] = useState('')
   const [userReferralCode, setUserReferralCode] = useState('')
-  const [verificationCode, setVerificationCode] = useState('')
   const [stakedNftIds, setStakedNftIds] = useState<Set<string>>(new Set())
   const [showUsernameModal, setShowUsernameModal] = useState(false)
   const [username, setUsername] = useState('')
@@ -378,7 +377,6 @@ export default function StakingPage() {
         nft_tier: selectedNft.tier,
         staking_duration_days: stakingDuration,
         referral_code_used: (referralCode?.trim() || undefined),
-        verification_code: verificationCode || undefined,
         timestamp: Date.now()
       }
 
@@ -763,34 +761,17 @@ export default function StakingPage() {
             </div>
 
             {/* Referral + Verification Inputs (synced with top-level referralCode) */}
-            <div className="mb-6 grid grid-cols-1 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Referral Code (Optional)
-                </label>
-                <input
-                  type="text"
-                  value={referralCode}
-                  onChange={(e: ChangeEvent<HTMLInputElement>) => setReferralCode(e.target.value)}
-                  placeholder="Enter referral code"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Verification Code (Optional)
-                </label>
-                <input
-                  type="text"
-                  value={verificationCode}
-                  onChange={(e: ChangeEvent<HTMLInputElement>) => setVerificationCode(e.target.value)}
-                  placeholder="Enter verification code if provided"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent"
-                />
-                <p className="text-xs text-gray-500 mt-1">
-                  This helps verify your staking transaction.
-                </p>
-              </div>
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Referral Code (Optional)
+              </label>
+              <input
+                type="text"
+                value={referralCode}
+                onChange={(e: ChangeEvent<HTMLInputElement>) => setReferralCode(e.target.value)}
+                placeholder="Enter referral code"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+              />
             </div>
 
             {/* Important Warning */}
