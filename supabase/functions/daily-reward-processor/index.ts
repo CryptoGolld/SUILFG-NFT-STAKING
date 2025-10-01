@@ -34,13 +34,9 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    // Allow either Authorization Bearer OR shared secret header
+    // Require Authorization: Bearer <SUPABASE_SERVICE_ROLE_KEY>
     const authHeader = req.headers.get('Authorization')
-    const dailySecret = req.headers.get('x-daily-reward-api-secret') || req.headers.get('X-Daily-Reward-Api-Secret')
-    const expectedSecret = Deno.env.get('DAILY_REWARD_API_SECRET')
-    const hasBearer = !!authHeader && authHeader.includes('Bearer')
-    const hasSecret = !!expectedSecret && dailySecret === expectedSecret
-    if (!hasBearer && !hasSecret) {
+    if (!authHeader || !authHeader.includes('Bearer')) {
       throw new Error('Unauthorized')
     }
 
