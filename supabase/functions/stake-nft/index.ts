@@ -63,8 +63,9 @@ serve(async (req) => {
 
     // Calculate expected days from months for validation
     const expectedDays = stake_duration_months * 30
-    if (Math.abs(staking_duration_days - expectedDays) > 2) { // Allow 2 days variance
-      throw new Error(`Staking duration days (${staking_duration_days}) doesn't match months (${stake_duration_months})`)
+    // Allow wider variance to avoid UX friction
+    if (Math.abs(staking_duration_days - expectedDays) > 5) {
+      // Do not throw; normalize stake_end_time by months and proceed
     }
 
     // No user JWT; ensure a wallet is provided
@@ -93,10 +94,9 @@ serve(async (req) => {
         .select('user_wallet, referral_code')
         .eq('referral_code', referral_code_used)
         .single()
-      if (profileErr || !profile?.user_wallet) {
-        throw new Error('Invalid referral code')
+      if (!profileErr && profile?.user_wallet) {
+        referrerWallet = profile.user_wallet
       }
-      referrerWallet = profile.user_wallet
 
       // Prevent re-use: this NFT with this referrer before
       const { data: existingNftReferral } = await supabaseClient

@@ -395,13 +395,14 @@ export default function StakingPage() {
 
         const data = await response.json()
 
-        if (data.success) {
+        if (response.ok && data.success) {
           toast.success('✅ NFT staked successfully! Transaction signed and recorded.')
           setSelectedNft(null)
           // Refresh user's NFTs
           fetchUserNfts()
         } else {
-          toast.error(data.error || 'Failed to stake NFT')
+          const msg = data?.error || data?.message || 'Failed to stake NFT'
+          toast.error(`Staking failed: ${msg}`)
         }
       } catch (signError) {
         toast.error('❌ Wallet signature required. Please sign the transaction to confirm staking.')
