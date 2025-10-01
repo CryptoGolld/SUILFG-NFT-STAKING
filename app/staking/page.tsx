@@ -217,6 +217,12 @@ export default function StakingPage() {
 
       const collected: SuiLFGNFT[] = []
 
+      // Helper: strict type match (handles generics like T<...>)
+      const isSuiLFGType = (t: string) => {
+        const base = (t || '').split('<')[0]
+        return base === NFT_TYPE
+      }
+
       // Parse directly owned NFTs
       for (const obj of ownedObjects.data) {
         if (stakedIds.has(obj.data?.objectId || '')) continue
@@ -225,7 +231,7 @@ export default function StakingPage() {
           const objType = objData?.type || ''
           console.log('Checking object type:', objType)
           
-          if (objType.includes('::governance_nfts::SuiLFG_NFT') || objType.includes('SuiLFG_NFT')) {
+          if (isSuiLFGType(objType)) {
             const content = objData.content as any
             const fields = content?.fields || {}
             const attributes = fields.attributes || []
@@ -252,7 +258,42 @@ export default function StakingPage() {
       console.log('Direct NFTs found:', collected.length)
 
       // Also load NFTs from any kiosks owned by the user
-      const kioskNfts = await fetchKioskNfts(suiClient, currentWallet.accounts[0].address)
+      const kioskNfts = await (async () => {
+        const results: SuiLFGNFT[] = []
+        try {
+          const kc = new KioskClient({ client: suiClient as any, network: 'mainnet' as Network })
+          const owned = await kc.getOwnedKiosks({ address: currentWallet.accounts[0].address })
+          for (const kioskId of owned.kioskIds || []) {
+            try {
+              const data = await kc.getKiosk({
+                id: kioskId,
+                options: { withObjects: true, withListingPrices: true, objectOptions: { showType: true, showContent: true } }
+              })
+              for (const it of data.items || []) {
+                const itemType = it.type || ''
+                if (!isSuiLFGType(itemType)) continue
+                const objData: any = it.data
+                const content: any = objData?.content
+                const fields: any = content?.fields || {}
+                const attributes = fields.attributes || []
+                const votingPower = attributes.find((attr: any) => attr.trait_type === 'Voting Power')?.value || '1.5x'
+                const objectId: string = (objData?.objectId as string) || fields?.id || ''
+                results.push({
+                  id: objectId,
+                  name: fields.name || `SuiLFG #${(objectId || '').slice(-4)}`,
+                  image: fields.image_url || fields.url || '',
+                  tier: determineNFTTier(fields),
+                  attributes: {
+                    votingPower,
+                    rarity: attributes.find((attr: any) => attr.trait_type === 'Rarity')?.value || 'Common'
+                  }
+                })
+              }
+            } catch {}
+          }
+        } catch {}
+        return results
+      })()
       console.log('Kiosk NFTs found:', kioskNfts.length)
       
       for (const nft of kioskNfts) {
