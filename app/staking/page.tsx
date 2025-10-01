@@ -361,58 +361,70 @@ export default function StakingPage() {
 
     setLoading(true)
     try {
-      // Create staking transaction on Sui blockchain
-      const suiClient = new SuiClient({ url: getFullnodeUrl('mainnet') })
-
-      // In a real implementation, you would:
-      // 1. Create a transaction to "stake" the NFT (could be a simple transfer or contract call)
-      // 2. The staking would be recorded on-chain for true decentralization
-      // 3. Users would sign this transaction with their wallet
-
-      // For now, we'll simulate this with a signed message approach
-      // In production, replace this with actual blockchain staking
-
-      const stakingData = {
+      // Build a message payload and require a wallet signature (client-side enforcement)
+      const payload = {
+        action: 'stake',
+        user_wallet: currentWallet.accounts[0].address,
         nft_object_id: selectedNft.id,
         nft_tier: selectedNft.tier,
         staking_duration_days: stakingDuration,
+        stake_duration_months: stakingMonths,
         referral_code_used: (referralCode?.trim() || undefined),
-        timestamp: Date.now()
+        ts: Date.now(),
+        nonce: Math.random().toString(36).slice(2)
       }
 
-      // Ask user to sign a message for intent confirmation
-      const signMessage = `Stake ${selectedNft.name} for ${stakingDuration} days. Tier: ${selectedNft.tier}. Referral: ${referralCode || 'none'}\nObject: ${selectedNft.id}\nWallet: ${currentWallet.accounts[0].address}\nTimestamp: ${new Date().toISOString()}`
+      const signedMessage = JSON.stringify(payload)
+      const messageBytes = new TextEncoder().encode(signedMessage)
 
+      // Attempt to sign via wallet standard features exposed by dapp-kit
+      let signatureBase64: string | undefined
       try {
-        const response = await fetch('/api/stake-nft', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            user_wallet: currentWallet.accounts[0].address,
-            nft_object_id: selectedNft.id,
-            nft_tier: selectedNft.tier,
-            staking_duration_days: stakingDuration,
-            stake_duration_months: stakingMonths,
-            referral_code_used: (referralCode?.trim() || undefined),
-            signed_message: signMessage
-          })
-        })
-
-        const data = await response.json()
-
-        if (response.ok && data.success) {
-          toast.success('✅ NFT staked successfully! Transaction signed and recorded.')
-          setSelectedNft(null)
-          // Refresh user's NFTs
-          fetchUserNfts()
-        } else {
-          const msg = data?.error || data?.message || 'Failed to stake NFT'
-          toast.error(`Staking failed: ${msg}`)
+        const anyWallet: any = currentWallet
+        const features = anyWallet?.features || {}
+        if (features['sui:signPersonalMessage']?.signPersonalMessage) {
+          const res = await features['sui:signPersonalMessage'].signPersonalMessage({ message: messageBytes })
+          signatureBase64 = res?.signature || res?.signatureBase64
+        } else if (features['sui:signMessage']?.signMessage) {
+          const res = await features['sui:signMessage'].signMessage({ message: messageBytes })
+          signatureBase64 = res?.signature || res?.signatureBase64
         }
-      } catch (signError) {
-        toast.error('❌ Wallet signature required. Please sign the transaction to confirm staking.')
+      } catch (err) {
+        // fallthrough to error handling below
+      }
+
+      if (!signatureBase64) {
+        toast.error('Wallet signature required to stake')
+        return
+      }
+
+      // Proceed with staking request (backend not verifying signature for now)
+      const response = await fetch('/api/stake-nft', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          user_wallet: currentWallet.accounts[0].address,
+          nft_object_id: selectedNft.id,
+          nft_tier: selectedNft.tier,
+          staking_duration_days: stakingDuration,
+          stake_duration_months: stakingMonths,
+          referral_code_used: (referralCode?.trim() || undefined),
+          signed_message: signedMessage,
+          signature: signatureBase64
+        })
+      })
+
+      const data = await response.json()
+
+      if (response.ok && data.success) {
+        toast.success('✅ NFT staked successfully!')
+        setSelectedNft(null)
+        fetchUserNfts()
+      } else {
+        const msg = data?.error || data?.message || 'Failed to stake NFT'
+        toast.error(`Staking failed: ${msg}`)
       }
     } catch (error) {
       toast.error('Failed to stake NFT')
