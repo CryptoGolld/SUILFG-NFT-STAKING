@@ -10,7 +10,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import toast from 'react-hot-toast'
 import { ArrowLeft, Wallet, Loader2, AlertTriangle } from 'lucide-react'
-import { getUserStakedNFTs, determineNFTTier, getUserProfile, createUserProfile, getUserProfileByWallet } from '@/lib/supabase'
+import { determineNFTTier, getUserProfile, createUserProfile, getUserProfileByWallet } from '@/lib/supabase'
 
 // SuiLFG NFT Contract Details (from project registry)
 const SUILFG_NFT_CONTRACT = '0xbd672d1c158c963ade8549ae83bda75f29f6b3ce0c59480f3921407c4e8c6781'
@@ -205,9 +205,15 @@ export default function StakingPage() {
 
     setLoading(true)
     try {
-      // Get user's staked NFTs to filter them out
-      const stakedNfts = await getUserStakedNFTs(currentWallet.accounts[0].address)
-      const stakedIds = new Set<string>((stakedNfts?.map((nft: { nft_object_id: string }) => nft.nft_object_id) as string[]) || [])
+      // Get user's staked NFTs via server API (bypasses RLS)
+      const dashResp = await fetch('/api/dashboard', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_wallet: currentWallet.accounts[0].address })
+      })
+      const dashData = await dashResp.json()
+      const stakedArray: Array<{ nft_object_id: string }> = Array.isArray(dashData?.staked) ? dashData.staked : []
+      const stakedIds = new Set<string>(stakedArray.map((n: any) => n.nft_object_id))
       setStakedNftIds(stakedIds)
 
       // Create Sui client for blockchain queries
@@ -247,9 +253,8 @@ export default function StakingPage() {
         return '1.5x'
       }
 
-      // Fetch staked to mark in UI
-      const stakedList = await getUserStakedNFTs(currentWallet.accounts[0].address)
-      const stakedIdSet = new Set<string>((stakedList || []).map((s: any) => s.nft_object_id))
+      // Use staked set from dashboard API
+      const stakedIdSet = stakedIds
 
       // Parse directly owned NFTs
       for (const obj of ownedObjects.data) {
