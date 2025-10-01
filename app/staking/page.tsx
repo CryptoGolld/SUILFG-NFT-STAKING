@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
 import { useState, useEffect, ChangeEvent } from 'react'
-import { useCurrentWallet, ConnectButton, useDisconnectWallet, useSignMessage } from '@mysten/dapp-kit'
+import { useCurrentWallet, ConnectButton, useDisconnectWallet } from '@mysten/dapp-kit'
 import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client'
 import { KioskClient, Network } from '@mysten/kiosk'
 import Link from 'next/link'
@@ -108,7 +108,7 @@ async function fetchKioskNfts(suiClient: SuiClient, ownerAddress: string): Promi
 export default function StakingPage() {
   const { isConnected, currentWallet } = useCurrentWallet()
   const { mutate: disconnect } = useDisconnectWallet()
-  const { mutateAsync: signMessageAsync } = useSignMessage()
+  // Signature prompt will be added after upgrading wallet SDK to expose a compatible sign hook
   const [nfts, setNfts] = useState<SuiLFGNFT[]>([])
   const [loading, setLoading] = useState(false)
   const [selectedNft, setSelectedNft] = useState<SuiLFGNFT | null>(null)
@@ -384,9 +384,6 @@ export default function StakingPage() {
       const signMessage = `Stake ${selectedNft.name} for ${stakingDuration} days. Tier: ${selectedNft.tier}. Referral: ${referralCode || 'none'}\nObject: ${selectedNft.id}\nWallet: ${currentWallet.accounts[0].address}\nTimestamp: ${new Date().toISOString()}`
 
       try {
-        // Require a real wallet signature before submitting
-        const signature = await signMessageAsync({ message: new TextEncoder().encode(signMessage) })
-
         const response = await fetch('/api/stake-nft', {
           method: 'POST',
           headers: {
@@ -399,9 +396,7 @@ export default function StakingPage() {
             staking_duration_days: stakingDuration,
             stake_duration_months: stakingMonths,
             referral_code_used: (referralCode?.trim() || undefined),
-            signed_message: signMessage,
-            signature: signature?.signature,
-            signature_publicKey: signature?.publicKey
+            signed_message: signMessage
           })
         })
 
