@@ -39,12 +39,18 @@ export async function POST(request: NextRequest) {
         verification_code
       })
     })
+    let data: any = null
+    try {
+      data = await response.json()
+    } catch (_) {
+      // Fall back to text if not JSON
+      const text = await response.text()
+      data = { error: text || 'Unknown error' }
+    }
 
-    const data = await response.json()
-
-    if (!response.ok) {
+    if (!response.ok || !data?.success) {
       return NextResponse.json(
-        { error: data.error || 'Failed to stake NFT' },
+        { error: data?.error || data?.message || response.statusText || 'Failed to stake NFT' },
         { status: response.status }
       )
     }
