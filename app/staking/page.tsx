@@ -5,6 +5,7 @@ export const revalidate = 0
 import { useState, useEffect, ChangeEvent } from 'react'
 import { useCurrentWallet, ConnectButton, useDisconnectWallet } from '@mysten/dapp-kit'
 import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client'
+import { KioskClient, Network } from '@mysten/kiosk'
 import Link from 'next/link'
 import Image from 'next/image'
 import toast from 'react-hot-toast'
@@ -42,96 +43,62 @@ const MIN_STAKING_DAYS = 30
 async function fetchKioskNfts(suiClient: SuiClient, ownerAddress: string): Promise<SuiLFGNFT[]> {
   const results: SuiLFGNFT[] = []
   try {
-    const ownerCaps = await suiClient.getOwnedObjects({
-      owner: ownerAddress,
-      filter: { StructType: '0x2::kiosk::KioskOwnerCap' },
-      options: { showType: true, showContent: true }
-    })
+    // Initialize KioskClient with the provided Sui client.
+    const kioskClient = new KioskClient({ client: suiClient as any, network: 'mainnet' as Network })
 
-    console.log('Found kiosk owner caps:', ownerCaps.data.length)
+    // Get kiosks owned by the address (requires owning the KioskOwnerCap).
+    const owned = await kioskClient.getOwnedKiosks({ address: ownerAddress })
+    const kioskIds = owned.kioskIds || []
 
-    for (const cap of ownerCaps.data) {
+    console.log('Owned kiosk ids:', kioskIds.length)
+
+    for (const kioskId of kioskIds) {
       try {
-        const content = (cap.data as any)?.content
-        const fields = content?.fields
-        const kioskId: string | undefined = fields?.for?.fields?.id?.id || fields?.for?.id
-        if (!kioskId) {
-          console.log('No kioskId found in cap')
-          continue
-        }
+        const kioskData = await kioskClient.getKiosk({
+          id: kioskId,
+          options: {
+            withObjects: true,
+            withListingPrices: true,
+            withKioskFields: false,
+            objectOptions: { showType: true, showContent: true },
+          },
+        })
 
-        console.log('Scanning kiosk:', kioskId)
+        for (const item of kioskData.items || []) {
+          const itemType: string = item.type || ''
+          if (!itemType) continue
 
-        let cursor: string | null | undefined = null
-        do {
-          const dfields = await suiClient.getDynamicFields({ parentId: kioskId, cursor: cursor || undefined })
-          console.log('Dynamic fields in kiosk:', dfields.data.length)
-          
-          for (const df of dfields.data) {
-            try {
-              // Fetch the dynamic field object to resolve the kiosk item, then extract the held object ID
-              const dfo = await suiClient.getDynamicFieldObject({ parentId: kioskId, name: df.name as any })
-              const valueFields: any = (dfo as any)?.data?.content?.fields?.value?.fields
-              const nameFields: any = (dfo as any)?.data?.content?.fields?.name as any
-              const nameInner: any = nameFields?.fields || nameFields
+          // Filter to our collection type.
+          if (itemType.includes('::governance_nfts::SuiLFG_NFT') || itemType.includes('SuiLFG_NFT')) {
+            const data: any = item.data
+            const objectId: string = (data?.objectId as string) || ''
 
-              const candidates: Array<any> = [
-                valueFields?.id?.id,
-                valueFields?.id,
-                valueFields?.object_id,
-                valueFields?.item_id,
-                nameInner?.id,
-                nameInner?.value,
-                nameInner?.fields?.id
-              ]
-              const heldObjectId: string | undefined = candidates.find((c) => typeof c === 'string' && c.startsWith('0x'))
-              
-              if (!heldObjectId || typeof heldObjectId !== 'string' || !heldObjectId.startsWith('0x')) {
-                console.log('No valid objectId in dynamic field')
-                continue
-              }
+            // Prefer full content if available, else try display fallbacks.
+            const content: any = data?.content
+            const fields: any = content?.fields || {}
+            const attributes = fields.attributes || []
+            const votingPower = attributes.find((attr: any) => attr.trait_type === 'Voting Power')?.value || '1.5x'
 
-              console.log('Checking kiosk item:', heldObjectId)
-
-              const obj = await suiClient.getObject({ id: heldObjectId, options: { showType: true, showContent: true } })
-              const data: any = (obj as any)?.data
-              const objType = data?.type || ''
-              
-              console.log('Kiosk item type:', objType)
-              
-              if (objType.includes('::governance_nfts::SuiLFG_NFT') || objType.includes('SuiLFG_NFT')) {
-                const nftContent = data.content as any
-                const nftFields = nftContent?.fields || {}
-                const attributes = nftFields.attributes || []
-                const votingPower = attributes.find((attr: any) => attr.trait_type === 'Voting Power')?.value || '1.5x'
-
-                console.log('Found SuiLFG NFT in kiosk:', data.objectId, nftFields.name)
-
-                results.push({
-                  id: data.objectId,
-                  name: nftFields.name || `SuiLFG #${data.objectId.slice(-4)}`,
-                  image: nftFields.image_url || nftFields.url || '',
-                  tier: determineNFTTier(nftFields),
-                  attributes: {
-                    votingPower,
-                    rarity: attributes.find((attr: any) => attr.trait_type === 'Rarity')?.value || 'Common'
-                  }
-                })
-              }
-            } catch (e) {
-              console.warn('Failed to load kiosk item via dynamic field:', e)
-            }
+            results.push({
+              id: objectId || fields?.id || '',
+              name: fields.name || `SuiLFG #${(objectId || '').slice(-4)}`,
+              image: fields.image_url || fields.url || '',
+              tier: determineNFTTier(fields),
+              attributes: {
+                votingPower,
+                rarity: attributes.find((attr: any) => attr.trait_type === 'Rarity')?.value || 'Common',
+              },
+            })
           }
-          cursor = dfields.nextCursor
-        } while (cursor)
+        }
       } catch (e) {
-        console.warn('Failed to parse kiosk cap:', e)
+        console.warn('Failed to fetch kiosk contents:', e)
       }
     }
   } catch (e) {
-    console.warn('Failed to enumerate kiosks:', e)
+    console.warn('Failed to enumerate kiosks via KioskClient:', e)
   }
-  console.log('Total kiosk NFTs found:', results.length)
+  console.log('Total kiosk NFTs found (KioskClient):', results.length)
   return results
 }
 
