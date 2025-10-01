@@ -116,7 +116,10 @@ serve(async (req) => {
     const stakeEndTimeISO = stakeEndTime.toISOString()
 
     // If referral code was used, create referral record first
-    if (referral_code_used && referrerWallet) {
+    if (referral_code_used) {
+      // Allow self-referrals: if referrerWallet is null (unresolved), skip creating a referral record
+      // If resolved (including self), create the referral
+      if (referrerWallet) {
       const { data: referralData, error: referralError } = await supabaseClient
         .from('referrals')
         .insert({
@@ -131,6 +134,7 @@ serve(async (req) => {
       }
 
       referralId = referralData.id
+      }
     }
 
     // Insert new stake record
@@ -144,7 +148,8 @@ serve(async (req) => {
         stake_duration_months,
         stake_start_time: stakeStartTime.toISOString(),
         stake_end_time: stakeEndTimeISO,
-        referral_code_used: referral_code_used || null,
+        // Store resolved referrer wallet if available; else store the raw code
+        referral_code_used: referrerWallet || referral_code_used || null,
         verification_code: verification_code || null,
         referral_id: referralId,
         status: 'active'
