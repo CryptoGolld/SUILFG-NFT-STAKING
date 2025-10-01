@@ -148,8 +148,8 @@ serve(async (req) => {
         stake_duration_months,
         stake_start_time: stakeStartTime.toISOString(),
         stake_end_time: stakeEndTimeISO,
-        // Store resolved referrer wallet if available; else store the raw code
-        referral_code_used: referrerWallet || referral_code_used || null,
+        // Store the raw referral code used (not the wallet)
+        referral_code_used: referral_code_used || null,
         verification_code: verification_code || null,
         referral_id: referralId,
         status: 'active'
