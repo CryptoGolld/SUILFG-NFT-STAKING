@@ -34,7 +34,7 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    // Only allow this function to be called by authorized services
+    // Require Authorization: Bearer <SUPABASE_SERVICE_ROLE_KEY>
     const authHeader = req.headers.get('Authorization')
     if (!authHeader || !authHeader.includes('Bearer')) {
       throw new Error('Unauthorized')
@@ -74,7 +74,7 @@ serve(async (req) => {
         staked_nfts!inner(nft_tier)
       `)
       .eq('status', 'pending')
-      .gte('staked_nfts.stake_start_time', tenDaysAgo.toISOString())
+      .lte('staked_nfts.stake_start_time', tenDaysAgo.toISOString())
 
     if (referralsError) {
       console.error('Failed to fetch eligible referrals:', referralsError)
@@ -120,15 +120,25 @@ serve(async (req) => {
           // Upsert points into the appropriate tier column
           const columnName = `${stake.nft_tier.toLowerCase()}_points`
 
+          // Ensure base row exists
+          await supabaseClient
+            .from('staking_rewards')
+            .upsert({ user_wallet: stake.user_wallet }, { onConflict: 'user_wallet' })
+
+          // Read current and increment safely
+          const { data: existingRewards } = await supabaseClient
+            .from('staking_rewards')
+            .select('council_points, governor_points, voter_points')
+            .eq('user_wallet', stake.user_wallet)
+            .single()
+
+          const currentValue = Number(existingRewards?.[columnName] ?? 0)
+          const newValue = currentValue + pointsToAdd
+
           const { error: rewardError } = await supabaseClient
             .from('staking_rewards')
-            .upsert({
-              user_wallet: stake.user_wallet,
-              [columnName]: supabaseClient.sql`COALESCE(${columnName}, 0) + ${pointsToAdd}`,
-              last_updated: new Date().toISOString()
-            }, {
-              onConflict: 'user_wallet'
-            })
+            .update({ [columnName]: newValue, last_updated: new Date().toISOString() })
+            .eq('user_wallet', stake.user_wallet)
 
           if (rewardError) {
             console.error(`Failed to update rewards for ${stake.user_wallet}:`, rewardError)
@@ -389,15 +399,25 @@ serve(async (req) => {
         // Upsert points into the appropriate tier column
         const columnName = `${grant.reward_tier.toLowerCase()}_points`
 
+        // Ensure base row exists
+        await supabaseClient
+          .from('staking_rewards')
+          .upsert({ user_wallet: grant.user_wallet }, { onConflict: 'user_wallet' })
+
+        // Read current and increment safely
+        const { data: existingRewards } = await supabaseClient
+          .from('staking_rewards')
+          .select('council_points, governor_points, voter_points')
+          .eq('user_wallet', grant.user_wallet)
+          .single()
+
+        const currentValue = Number(existingRewards?.[columnName] ?? 0)
+        const newValue = currentValue + pointsToAdd
+
         const { error: rewardError } = await supabaseClient
           .from('staking_rewards')
-          .upsert({
-            user_wallet: grant.user_wallet,
-            [columnName]: supabaseClient.sql`COALESCE(${columnName}, 0) + ${pointsToAdd}`,
-            last_updated: new Date().toISOString()
-          }, {
-            onConflict: 'user_wallet'
-          })
+          .update({ [columnName]: newValue, last_updated: new Date().toISOString() })
+          .eq('user_wallet', grant.user_wallet)
 
         if (rewardError) {
           console.error(`Failed to process manual grant for ${grant.user_wallet}:`, rewardError)

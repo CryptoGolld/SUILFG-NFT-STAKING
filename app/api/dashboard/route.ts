@@ -21,11 +21,29 @@ export async function POST(req: NextRequest) {
       auth: { autoRefreshToken: false, persistSession: false }
     })
 
+    // Fetch profile to support legacy referrals where referrer_wallet stored referral_code
+    const profileRes = await admin
+      .from('user_profiles')
+      .select('referral_code')
+      .eq('user_wallet', user_wallet)
+      .single()
+
+    const referralCode = profileRes.data?.referral_code as string | undefined
+
     const [rewards, staked, grants, referrals, forfeitures] = await Promise.all([
       admin.from('staking_rewards').select('*').eq('user_wallet', user_wallet).single(),
       admin.from('staked_nfts').select('*').eq('user_wallet', user_wallet).order('created_at', { ascending: false }),
       admin.from('manual_reward_grants').select('*').eq('user_wallet', user_wallet).eq('status', 'active').or('grant_end_time.is.null,grant_end_time.gte.' + new Date().toISOString()),
-      admin.from('referrals').select('*, staked_nfts!inner(nft_tier)').eq('referrer_wallet', user_wallet),
+      // Left join so referrals without staked_nft_id (yet) are still returned, and support legacy rows
+      (async () => {
+        let q = admin.from('referrals').select('*, staked_nfts(nft_tier)')
+        if (referralCode) {
+          q = q.or(`referrer_wallet.eq.${user_wallet},referrer_wallet.eq.${referralCode}`)
+        } else {
+          q = q.eq('referrer_wallet', user_wallet)
+        }
+        return q
+      })(),
       admin.from('forfeitures').select('id, staked_nft_id, original_staker_wallet, forfeiture_reason, forfeited_at, staked_nfts!inner(nft_tier)').eq('referrer_wallet', user_wallet).order('forfeited_at', { ascending: false })
     ])
 

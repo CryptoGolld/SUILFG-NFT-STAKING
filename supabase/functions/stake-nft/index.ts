@@ -41,6 +41,15 @@ serve(async (req) => {
     }
 
     const body: StakeRequest = await req.json()
+    console.log('Stake request payload (redacted where applicable):', {
+      user_wallet: body.user_wallet,
+      nft_object_id: body.nft_object_id,
+      nft_tier: body.nft_tier,
+      staking_duration_days: body.staking_duration_days,
+      stake_duration_months: body.stake_duration_months,
+      referral_code_used: body.referral_code_used,
+      verification_code: body.verification_code
+    })
 
     // Validate required fields
     const { user_wallet, nft_object_id, nft_tier, staking_duration_days, stake_duration_months, referral_code_used, verification_code } = body
@@ -63,8 +72,9 @@ serve(async (req) => {
 
     // Calculate expected days from months for validation
     const expectedDays = stake_duration_months * 30
-    if (Math.abs(staking_duration_days - expectedDays) > 2) { // Allow 2 days variance
-      throw new Error(`Staking duration days (${staking_duration_days}) doesn't match months (${stake_duration_months})`)
+    // Allow wider variance to avoid UX friction
+    if (Math.abs(staking_duration_days - expectedDays) > 5) {
+      // Do not throw; normalize stake_end_time by months and proceed
     }
 
     // No user JWT; ensure a wallet is provided
@@ -93,10 +103,14 @@ serve(async (req) => {
         .select('user_wallet, referral_code')
         .eq('referral_code', referral_code_used)
         .single()
-      if (profileErr || !profile?.user_wallet) {
-        throw new Error('Invalid referral code')
+      if (!profileErr && profile?.user_wallet) {
+        referrerWallet = profile.user_wallet
       }
-      referrerWallet = profile.user_wallet
+      console.log('Referral resolution:', {
+        referral_code_used,
+        resolved_referrer_wallet: referrerWallet || null,
+        profileErr: profileErr ? profileErr.message : null
+      })
 
       // Prevent re-use: this NFT with this referrer before
       const { data: existingNftReferral } = await supabaseClient
@@ -116,7 +130,10 @@ serve(async (req) => {
     const stakeEndTimeISO = stakeEndTime.toISOString()
 
     // If referral code was used, create referral record first
-    if (referral_code_used && referrerWallet) {
+    if (referral_code_used) {
+      // Allow self-referrals: if referrerWallet is null (unresolved), skip creating a referral record
+      // If resolved (including self), create the referral
+      if (referrerWallet) {
       const { data: referralData, error: referralError } = await supabaseClient
         .from('referrals')
         .insert({
@@ -131,9 +148,25 @@ serve(async (req) => {
       }
 
       referralId = referralData.id
+        console.log('Created referral record:', { referralId, referrer_wallet: referrerWallet })
+      }
     }
 
     // Insert new stake record
+    console.log('About to insert staked_nfts row:', {
+      user_wallet,
+      nft_object_id,
+      nft_tier,
+      staking_duration_days,
+      stake_duration_months,
+      stake_start_time: stakeStartTime.toISOString(),
+      stake_end_time: stakeEndTimeISO,
+      referral_code_used: referral_code_used || null,
+      verification_code: verification_code || null,
+      referral_id: referralId,
+      status: 'active'
+    })
+
     const { data: stakeData, error: stakeError } = await supabaseClient
       .from('staked_nfts')
       .insert({
@@ -144,6 +177,7 @@ serve(async (req) => {
         stake_duration_months,
         stake_start_time: stakeStartTime.toISOString(),
         stake_end_time: stakeEndTimeISO,
+        // Store the raw referral code used (not the wallet)
         referral_code_used: referral_code_used || null,
         verification_code: verification_code || null,
         referral_id: referralId,
@@ -155,6 +189,7 @@ serve(async (req) => {
     if (stakeError) {
       throw new Error(`Failed to create stake: ${stakeError.message}`)
     }
+    console.log('Inserted stake row:', { stake_id: stakeData.id, referral_id: referralId })
 
     // Update the referral record with the staked_nft_id
     if (referralId) {

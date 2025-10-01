@@ -10,7 +10,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import toast from 'react-hot-toast'
 import { ArrowLeft, Wallet, Loader2, AlertTriangle } from 'lucide-react'
-import { getUserStakedNFTs, determineNFTTier, getUserProfile, createUserProfile, getUserProfileByWallet } from '@/lib/supabase'
+import { determineNFTTier, getUserProfile, createUserProfile, getUserProfileByWallet } from '@/lib/supabase'
 
 // SuiLFG NFT Contract Details (from project registry)
 const SUILFG_NFT_CONTRACT = '0xbd672d1c158c963ade8549ae83bda75f29f6b3ce0c59480f3921407c4e8c6781'
@@ -24,6 +24,7 @@ interface SuiLFGNFT {
   attributes: { rarity: string; votingPower: string }
   isListed?: boolean
   listingPrice?: string
+  isStaked?: boolean
 }
 
 const TIER_COLORS = {
@@ -107,6 +108,7 @@ async function fetchKioskNfts(suiClient: SuiClient, ownerAddress: string): Promi
 export default function StakingPage() {
   const { isConnected, currentWallet } = useCurrentWallet()
   const { mutate: disconnect } = useDisconnectWallet()
+  // Signature prompt will be added after upgrading wallet SDK to expose a compatible sign hook
   const [nfts, setNfts] = useState<SuiLFGNFT[]>([])
   const [loading, setLoading] = useState(false)
   const [selectedNft, setSelectedNft] = useState<SuiLFGNFT | null>(null)
@@ -114,7 +116,6 @@ export default function StakingPage() {
   const [stakingMonths, setStakingMonths] = useState(1)
   const [referralCode, setReferralCode] = useState('')
   const [userReferralCode, setUserReferralCode] = useState('')
-  const [verificationCode, setVerificationCode] = useState('')
   const [stakedNftIds, setStakedNftIds] = useState<Set<string>>(new Set())
   const [showUsernameModal, setShowUsernameModal] = useState(false)
   const [username, setUsername] = useState('')
@@ -204,9 +205,15 @@ export default function StakingPage() {
 
     setLoading(true)
     try {
-      // Get user's staked NFTs to filter them out
-      const stakedNfts = await getUserStakedNFTs(currentWallet.accounts[0].address)
-      const stakedIds = new Set<string>((stakedNfts?.map((nft: { nft_object_id: string }) => nft.nft_object_id) as string[]) || [])
+      // Get user's staked NFTs via server API (bypasses RLS)
+      const dashResp = await fetch('/api/dashboard', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_wallet: currentWallet.accounts[0].address })
+      })
+      const dashData = await dashResp.json()
+      const stakedArray: Array<{ nft_object_id: string }> = Array.isArray(dashData?.staked) ? dashData.staked : []
+      const stakedIds = new Set<string>(stakedArray.map((n: any) => n.nft_object_id))
       setStakedNftIds(stakedIds)
 
       // Create Sui client for blockchain queries
@@ -246,6 +253,9 @@ export default function StakingPage() {
         return '1.5x'
       }
 
+      // Use staked set from dashboard API
+      const stakedIdSet = stakedIds
+
       // Parse directly owned NFTs
       for (const obj of ownedObjects.data) {
         if (stakedIds.has(obj.data?.objectId || '')) continue
@@ -270,7 +280,8 @@ export default function StakingPage() {
                 votingPower,
                 rarity: (fields?.attributes || []).find((attr: any) => (attr?.trait_type || attr?.traitType || attr?.key || '').toString().toLowerCase() === 'rarity')?.value || 'Common'
               },
-              isListed: false
+              isListed: false,
+              isStaked: stakedIdSet.has(objData.objectId)
             })
           }
         } catch (error) {
@@ -312,7 +323,8 @@ export default function StakingPage() {
                     rarity: (fields?.attributes || []).find((attr: any) => (attr?.trait_type || attr?.traitType || attr?.key || '').toString().toLowerCase() === 'rarity')?.value || 'Common'
                   },
                   isListed,
-                  listingPrice: price ? String(price) : undefined
+                  listingPrice: price ? String(price) : undefined,
+                  isStaked: stakedIdSet.has(objectId)
                 })
               }
             } catch {}
@@ -364,18 +376,14 @@ export default function StakingPage() {
         nft_object_id: selectedNft.id,
         nft_tier: selectedNft.tier,
         staking_duration_days: stakingDuration,
-        referral_code_used: referralCode || undefined,
-        verification_code: verificationCode || undefined,
+        referral_code_used: (referralCode?.trim() || undefined),
         timestamp: Date.now()
       }
 
-      // Request user to sign the staking data
-      const signMessage = `Stake ${selectedNft.name} for ${stakingDuration} days. Tier: ${selectedNft.tier}. Referral: ${referralCode || 'none'}`
+      // Ask user to sign a message for intent confirmation
+      const signMessage = `Stake ${selectedNft.name} for ${stakingDuration} days. Tier: ${selectedNft.tier}. Referral: ${referralCode || 'none'}\nObject: ${selectedNft.id}\nWallet: ${currentWallet.accounts[0].address}\nTimestamp: ${new Date().toISOString()}`
 
       try {
-        // This would require wallet signature in a real implementation
-        // For now, we'll proceed with the API call but note it needs wallet signing
-
         const response = await fetch('/api/stake-nft', {
           method: 'POST',
           headers: {
@@ -387,21 +395,21 @@ export default function StakingPage() {
             nft_tier: selectedNft.tier,
             staking_duration_days: stakingDuration,
             stake_duration_months: stakingMonths,
-            referral_code_used: referralCode || undefined,
-            verification_code: verificationCode || undefined,
-            signed_message: signMessage // In real implementation, this would be cryptographically signed
+            referral_code_used: (referralCode?.trim() || undefined),
+            signed_message: signMessage
           })
         })
 
         const data = await response.json()
 
-        if (data.success) {
+        if (response.ok && data.success) {
           toast.success('✅ NFT staked successfully! Transaction signed and recorded.')
           setSelectedNft(null)
           // Refresh user's NFTs
           fetchUserNfts()
         } else {
-          toast.error(data.error || 'Failed to stake NFT')
+          const msg = data?.error || data?.message || 'Failed to stake NFT'
+          toast.error(`Staking failed: ${msg}`)
         }
       } catch (signError) {
         toast.error('❌ Wallet signature required. Please sign the transaction to confirm staking.')
@@ -584,13 +592,13 @@ export default function StakingPage() {
                     return (
                       <div
                         key={nft.id}
-                        onClick={() => !nft.isListed && setSelectedNft(nft)}
+                        onClick={() => !nft.isListed && !nft.isStaked && setSelectedNft(nft)}
                         role="button"
                         tabIndex={0}
                         onKeyDown={(e) => {
-                          if ((e.key === 'Enter' || e.key === ' ') && !nft.isListed) setSelectedNft(nft)
+                          if ((e.key === 'Enter' || e.key === ' ') && !nft.isListed && !nft.isStaked) setSelectedNft(nft)
                         }}
-                        className={`border-2 ${colors.border} ${colors.bg} rounded-lg overflow-hidden hover:shadow-lg transition-shadow ${nft.isListed ? '' : 'cursor-pointer'}`}
+                        className={`border-2 ${colors.border} ${colors.bg} rounded-lg overflow-hidden hover:shadow-lg transition-shadow ${(!nft.isListed && !nft.isStaked) ? 'cursor-pointer' : ''}`}
                       >
                         <div className="aspect-square bg-gray-200">
                           <img
@@ -605,6 +613,11 @@ export default function StakingPage() {
                             {nft.isListed && (
                               <span className="ml-2 text-xs px-2 py-0.5 rounded bg-yellow-100 text-yellow-800 whitespace-nowrap">
                                 Listed{nft.listingPrice ? ` • ${nft.listingPrice}` : ''}
+                              </span>
+                            )}
+                            {nft.isStaked && (
+                              <span className="ml-2 text-xs px-2 py-0.5 rounded bg-green-100 text-green-800 whitespace-nowrap">
+                                Staked
                               </span>
                             )}
                           </div>
@@ -622,11 +635,11 @@ export default function StakingPage() {
                             </span>
                           </div>
                           <button
-                            onClick={() => !nft.isListed && setSelectedNft(nft)}
-                            disabled={Boolean(nft.isListed)}
-                            className={`w-full ${nft.isListed ? 'bg-gray-300 cursor-not-allowed' : colors.button} text-white py-2 px-3 sm:px-4 rounded-lg font-medium transition-colors text-sm`}
+                            onClick={() => !nft.isListed && !nft.isStaked && setSelectedNft(nft)}
+                            disabled={Boolean(nft.isListed || nft.isStaked)}
+                            className={`w-full ${(nft.isListed || nft.isStaked) ? 'bg-gray-300 cursor-not-allowed' : colors.button} text-white py-2 px-3 sm:px-4 rounded-lg font-medium transition-colors text-sm`}
                           >
-                            {nft.isListed ? 'Unlist to Stake' : `Stake for ${stakingDuration} Days`}
+                            {nft.isListed ? 'Unlist to Stake' : (nft.isStaked ? 'Already Staked' : `Stake for ${stakingDuration} Days`)}
                           </button>
                         </div>
                       </div>
@@ -701,6 +714,7 @@ export default function StakingPage() {
                 <div className="min-w-0 flex-1">
                   <h3 className="font-semibold truncate">{selectedNft.name}</h3>
                   <p className="text-sm text-gray-600 capitalize">{selectedNft.tier} Tier</p>
+                  <p className="text-xs text-gray-500 break-all">ID: {selectedNft.id}</p>
                   <p className="text-xs text-brand-600 mt-1">
                     {selectedNft.attributes.votingPower} voting power
                   </p>
@@ -741,21 +755,18 @@ export default function StakingPage() {
               </div>
             </div>
 
-            {/* Verification Code Input */}
+            {/* Referral + Verification Inputs (synced with top-level referralCode) */}
             <div className="mb-6">
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Verification Code (Optional)
+                Referral Code (Optional)
               </label>
               <input
                 type="text"
-                value={verificationCode}
-                onChange={(e: ChangeEvent<HTMLInputElement>) => setVerificationCode(e.target.value)}
-                placeholder="Enter verification code if provided"
+                value={referralCode}
+                onChange={(e: ChangeEvent<HTMLInputElement>) => setReferralCode(e.target.value)}
+                placeholder="Enter referral code"
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent"
               />
-              <p className="text-xs text-gray-500 mt-1">
-                This helps verify your staking transaction.
-              </p>
             </div>
 
             {/* Important Warning */}
