@@ -5,6 +5,17 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { user_wallet, nft_object_id, nft_tier, staking_duration_days, stake_duration_months, referral_code_used, verification_code } = body
 
+    // Debug log to server console (shows up in Vercel logs)
+    console.log('stake-nft API received:', {
+      user_wallet,
+      nft_object_id,
+      nft_tier,
+      staking_duration_days,
+      stake_duration_months,
+      referral_code_used,
+      verification_code
+    })
+
     // Call Supabase Edge Function
     const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL
     const stakeSecret = process.env.STAKE_API_SECRET || ''

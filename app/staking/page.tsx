@@ -372,13 +372,11 @@ export default function StakingPage() {
       // For now, we'll simulate this with a signed message approach
       // In production, replace this with actual blockchain staking
 
-      const effectiveReferralCode = (referralCode?.trim() || userReferralCode?.trim() || '') || undefined
-
       const stakingData = {
         nft_object_id: selectedNft.id,
         nft_tier: selectedNft.tier,
         staking_duration_days: stakingDuration,
-        referral_code_used: effectiveReferralCode,
+        referral_code_used: (referralCode?.trim() || undefined),
         verification_code: verificationCode || undefined,
         timestamp: Date.now()
       }
@@ -402,7 +400,7 @@ export default function StakingPage() {
             nft_tier: selectedNft.tier,
             staking_duration_days: stakingDuration,
             stake_duration_months: stakingMonths,
-            referral_code_used: effectiveReferralCode,
+            referral_code_used: (referralCode?.trim() || undefined),
             signed_message: signMessage
           })
         })
