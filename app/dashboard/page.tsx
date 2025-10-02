@@ -57,7 +57,8 @@ export default function DashboardPage() {
   const [forfeitures, setForfeitures] = useState<ForfeitureData[]>([])
   const [loading, setLoading] = useState(false)
   const [debugReferrals, setDebugReferrals] = useState<any[]>([])
-  const DEBUG = process.env.NEXT_PUBLIC_DEBUG === 'true'
+  const [showDebug, setShowDebug] = useState(false)
+  const [referralDebug, setReferralDebug] = useState<any>(null)
 
   useEffect(() => {
     if (isConnected && currentWallet) {
@@ -123,13 +124,17 @@ export default function DashboardPage() {
 
         // Store raw for debug panel
         setDebugReferrals(data.referrals)
+        setReferralDebug(data.referralDebug || null)
 
         // Surface referral counts visibly without DevTools
         try {
           // Avoid spamming during initial mount
           toast.dismiss()
         } catch {}
-        toast(`Referrals: total ${totalReferrals} • confirmed ${confirmedReferrals} • pending ${pendingReferrals}`)
+        const byWallet = data?.referralDebug?.byWalletCount ?? 'n/a'
+        const byCode = data?.referralDebug?.byCodeCount ?? 'n/a'
+        const usedFallback = data?.referralDebug?.usedFallbackToCode ? ' (using code fallback)' : ''
+        toast(`Referrals: total ${totalReferrals} • confirmed ${confirmedReferrals} • pending ${pendingReferrals} • wallet ${byWallet} • code ${byCode}${usedFallback}`)
       }
 
       if (Array.isArray(data.forfeitures)) {
@@ -456,16 +461,24 @@ export default function DashboardPage() {
                 {loading ? 'Refreshing...' : 'Refresh Data'}
               </button>
             </div>
+            <div className="mt-4 flex justify-center">
+              <button
+                onClick={() => setShowDebug((v) => !v)}
+                className="text-xs px-3 py-1 border rounded text-gray-600 hover:bg-gray-50"
+              >
+                {showDebug ? 'Hide Referral Details' : 'Show Referral Details'}
+              </button>
+            </div>
 
-            {DEBUG && (
-              <div className="mt-8 bg-gray-50 border border-gray-200 rounded-lg p-4">
-                <div className="text-sm font-semibold mb-2">Debug</div>
-                <pre className="text-xs whitespace-pre-wrap break-all">
-{JSON.stringify({
-  referralsCount: debugReferrals.length,
-  firstThree: debugReferrals.slice(0, 3)
-}, null, 2)}
-                </pre>
+            {showDebug && (
+              <div className="mt-4 bg-gray-50 border border-gray-200 rounded-lg p-4">
+                <div className="text-sm font-semibold mb-2">Referral Details</div>
+                <div className="text-xs text-gray-700 mb-2">
+                  By Wallet Count: {referralDebug?.byWalletCount ?? 'n/a'} • By Code Count: {referralDebug?.byCodeCount ?? 'n/a'} {referralDebug?.usedFallbackToCode ? '(using code fallback)' : ''}
+                </div>
+                <div className="text-xs font-mono whitespace-pre-wrap break-all">
+{JSON.stringify(debugReferrals.slice(0, 10), null, 2)}
+                </div>
               </div>
             )}
           </>
