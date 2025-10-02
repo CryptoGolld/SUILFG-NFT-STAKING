@@ -31,13 +31,16 @@ export async function POST(req: NextRequest) {
     const referralCode = profileRes.data?.referral_code as string | undefined
 
     // Run queries in parallel
-    const [rewards, staked, grants, referralsWallet, referralsByCode, forfeitures] = await Promise.all([
+    const [rewards, staked, grants, referralsWallet, referralsByCode, stakedByMyCode, forfeitures] = await Promise.all([
       admin.from('staking_rewards').select('*').eq('user_wallet', user_wallet).single(),
       admin.from('staked_nfts').select('*').eq('user_wallet', user_wallet).order('created_at', { ascending: false }),
       admin.from('manual_reward_grants').select('*').eq('user_wallet', user_wallet).eq('status', 'active').or('grant_end_time.is.null,grant_end_time.gte.' + new Date().toISOString()),
       admin.from('referrals').select('*, staked_nfts(nft_tier)').eq('referrer_wallet', user_wallet),
       referralCode
         ? admin.from('referrals').select('*, staked_nfts(nft_tier)').eq('referrer_wallet', referralCode)
+        : Promise.resolve({ data: [], error: null } as any),
+      referralCode
+        ? admin.from('staked_nfts').select('id').eq('referral_code_used', referralCode)
         : Promise.resolve({ data: [], error: null } as any),
       admin.from('forfeitures').select('id, staked_nft_id, original_staker_wallet, forfeiture_reason, forfeited_at, staked_nfts!inner(nft_tier)').eq('referrer_wallet', user_wallet).order('forfeited_at', { ascending: false })
     ])
@@ -57,7 +60,9 @@ export async function POST(req: NextRequest) {
         byWalletCount: walletCount,
         byCodeCount: codeCount,
         usedFallbackToCode: walletCount === 0 && codeCount > 0,
-        referralCode: referralCode || null
+        referralCode: referralCode || null,
+        queryWallet: user_wallet,
+        stakedUsingMyCodeCount: stakedByMyCode.data?.length || 0
       }
     }
 
