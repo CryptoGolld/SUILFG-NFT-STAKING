@@ -60,9 +60,37 @@ export async function POST(req: NextRequest) {
         }))
       : []
 
+    // Enrich staked items with referrer username (via referral_code_used -> user_profiles)
+    let stakedEnriched = staked.data ?? []
+    try {
+      const codes = Array.from(new Set((staked.data ?? [])
+        .map((s: any) => s.referral_code_used)
+        .filter((c: any) => typeof c === 'string' && c.length > 0)))
+      if (codes.length > 0) {
+        const profiles = await admin
+          .from('user_profiles')
+          .select('user_wallet, username, referral_code')
+          .in('referral_code', codes)
+        const codeToProfile = new Map<string, { user_wallet: string, username: string }>()
+        for (const p of (profiles.data || [])) {
+          codeToProfile.set(p.referral_code, { user_wallet: p.user_wallet, username: p.username })
+        }
+        stakedEnriched = (staked.data || []).map((s: any) => {
+          const prof = s.referral_code_used ? codeToProfile.get(s.referral_code_used) : undefined
+          return {
+            ...s,
+            referrer_wallet: prof?.user_wallet || null,
+            referrer_username: prof?.username || null,
+          }
+        })
+      }
+    } catch (_) {
+      // if enrichment fails, fall back silently
+    }
+
     const resp = {
       rewards: rewards.data ?? null,
-      staked: staked.data ?? [],
+      staked: stakedEnriched,
       grants: grants.data ?? [],
       referrals: finalReferrals.length > 0 ? finalReferrals : derivedReferrals,
       forfeitures: forfeitures.data ?? [],

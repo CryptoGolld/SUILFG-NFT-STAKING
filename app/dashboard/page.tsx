@@ -24,6 +24,8 @@ interface StakedNFT {
   stake_start_time: string
   stake_end_time: string
   status: 'active' | 'completed' | 'forfeited'
+  referrer_username?: string | null
+  referrer_wallet?: string | null
 }
 
 interface ManualGrant {
@@ -59,6 +61,8 @@ export default function DashboardPage() {
   const [debugReferrals, setDebugReferrals] = useState<any[]>([])
   const [showDebug, setShowDebug] = useState(false)
   const [referralDebug, setReferralDebug] = useState<any>(null)
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({})
+  const [expandedImages, setExpandedImages] = useState<Record<string, string>>({})
 
   useEffect(() => {
     if (isConnected && currentWallet) {
@@ -95,7 +99,9 @@ export default function DashboardPage() {
           tier: nft.nft_tier,
           stake_start_time: nft.stake_start_time,
           stake_end_time: nft.stake_end_time,
-          status: nft.status
+          status: nft.status,
+          referrer_username: nft.referrer_username || null,
+          referrer_wallet: nft.referrer_wallet || null
         }))
         setStakedNfts(formattedStakedNfts)
       }
@@ -174,6 +180,27 @@ export default function DashboardPage() {
       case 'Governor': return <Star className="w-8 h-8" />
       case 'Voter': return <Award className="w-8 h-8" />
       default: return <Trophy className="w-8 h-8" />
+    }
+  }
+
+  // Lazy load NFT image on expand using Sui RPC display fields
+  const loadNftImage = async (objectId: string) => {
+    try {
+      if (expandedImages[objectId]) return
+      const res = await fetch('https://fullnode.mainnet.sui.io:443', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'sui_getObject', params: [objectId, { showContent: true, showDisplay: true }] })
+      })
+      const json = await res.json()
+      const display = json?.result?.data?.display?.data || {}
+      const contentFields = json?.result?.data?.content?.fields || {}
+      const image = display.image_url || display.image || contentFields.image_url || contentFields.url || ''
+      if (image) {
+        setExpandedImages((prev) => ({ ...prev, [objectId]: image }))
+      }
+    } catch (_) {
+      // ignore
     }
   }
 
@@ -308,21 +335,63 @@ export default function DashboardPage() {
                 ) : (
                   <div className="space-y-4">
                     {stakedNfts.map((nft) => (
-                      <div key={nft.id} className="flex items-center justify-between p-4 border rounded-lg">
-                        <div className="flex items-center space-x-3">
-                          <div className="w-12 h-12 bg-gray-200 rounded-lg flex items-center justify-center">
-                            {getTierIcon(nft.tier)}
-                          </div>
-                          <div>
-                            <h3 className="font-medium">{nft.name}</h3>
-                            <p className="text-sm text-gray-600 capitalize">{nft.tier} Tier</p>
-                          </div>
+                  <div key={nft.id} className="p-4 border rounded-lg">
+                    <button
+                      onClick={async () => {
+                        setExpanded((prev) => ({ ...prev, [nft.id]: !prev[nft.id] }))
+                        if (!expanded[nft.id]) await loadNftImage(nft.nft_object_id)
+                      }}
+                      className="w-full flex items-center justify-between"
+                    >
+                      <div className="flex items-center space-x-3 text-left">
+                        <div className="w-12 h-12 bg-gray-200 rounded-lg flex items-center justify-center">
+                          {getTierIcon(nft.tier)}
                         </div>
-                        <div className="text-right">
-                          <div className="text-sm font-medium">{getTimeRemaining(nft.stake_end_time)}</div>
-                          <div className="text-xs text-gray-500">remaining</div>
+                        <div>
+                          <h3 className="font-medium">{nft.name}</h3>
+                          <p className="text-sm text-gray-600 capitalize">{nft.tier} Tier</p>
                         </div>
                       </div>
+                      <div className="text-right">
+                        <div className="text-sm font-medium">{getTimeRemaining(nft.stake_end_time)}</div>
+                        <div className="text-xs text-gray-500">{expanded[nft.id] ? 'hide' : 'details'}</div>
+                      </div>
+                    </button>
+
+                    {expanded[nft.id] && (
+                      <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div className="sm:col-span-1">
+                          <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden">
+                            {expandedImages[nft.nft_object_id] ? (
+                              <img src={expandedImages[nft.nft_object_id]} alt={nft.name} className="w-full h-full object-cover" />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center text-gray-400 text-sm">No image</div>
+                            )}
+                          </div>
+                        </div>
+                        <div className="sm:col-span-2">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                            <div>
+                              <div className="text-gray-500">Referral Code Used</div>
+                              <div className="font-mono break-all">{/* shown below from API staked enrichment when we add it to type */}</div>
+                            </div>
+                            <div>
+                              <div className="text-gray-500">Referrer</div>
+                              <div>{nft.referrer_username ? `${nft.referrer_username} (${nft.referrer_wallet?.slice(0,6)}...${nft.referrer_wallet?.slice(-4)})` : '—'}</div>
+                            </div>
+                            <div>
+                              <div className="text-gray-500">NFT ID</div>
+                              <div className="font-mono break-all">{nft.nft_object_id}</div>
+                            </div>
+                            <div>
+                              <div className="text-gray-500">Stake Window</div>
+                              <div>{new Date(nft.stake_start_time).toLocaleDateString()} → {new Date(nft.stake_end_time).toLocaleDateString()}</div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                     ))}
                   </div>
                 )}
