@@ -30,35 +30,38 @@ export async function POST(req: NextRequest) {
 
     const referralCode = profileRes.data?.referral_code as string | undefined
 
-    const [rewards, staked, grants, referrals, forfeitures] = await Promise.all([
+    // Run queries in parallel
+    const [rewards, staked, grants, referralsWallet, referralsByCode, forfeitures] = await Promise.all([
       admin.from('staking_rewards').select('*').eq('user_wallet', user_wallet).single(),
       admin.from('staked_nfts').select('*').eq('user_wallet', user_wallet).order('created_at', { ascending: false }),
       admin.from('manual_reward_grants').select('*').eq('user_wallet', user_wallet).eq('status', 'active').or('grant_end_time.is.null,grant_end_time.gte.' + new Date().toISOString()),
-      // Fetch referrals for this wallet; if none found, fall back to legacy rows keyed by referral_code
-      (async () => {
-        const primary = await admin
-          .from('referrals')
-          .select('*, staked_nfts(nft_tier)')
-          .eq('referrer_wallet', user_wallet)
-        if ((primary.data?.length || 0) > 0 || !referralCode) return primary
-        const fallback = await admin
-          .from('referrals')
-          .select('*, staked_nfts(nft_tier)')
-          .eq('referrer_wallet', referralCode)
-        return fallback
-      })(),
+      admin.from('referrals').select('*, staked_nfts(nft_tier)').eq('referrer_wallet', user_wallet),
+      referralCode
+        ? admin.from('referrals').select('*, staked_nfts(nft_tier)').eq('referrer_wallet', referralCode)
+        : Promise.resolve({ data: [], error: null } as any),
       admin.from('forfeitures').select('id, staked_nft_id, original_staker_wallet, forfeiture_reason, forfeited_at, staked_nfts!inner(nft_tier)').eq('referrer_wallet', user_wallet).order('forfeited_at', { ascending: false })
     ])
+
+    // Choose which referrals to return
+    const walletCount = referralsWallet.data?.length || 0
+    const codeCount = referralsByCode.data?.length || 0
+    const finalReferrals = walletCount > 0 ? (referralsWallet.data || []) : (referralsByCode.data || [])
 
     const resp = {
       rewards: rewards.data ?? null,
       staked: staked.data ?? [],
       grants: grants.data ?? [],
-      referrals: referrals.data ?? [],
-      forfeitures: forfeitures.data ?? []
+      referrals: finalReferrals,
+      forfeitures: forfeitures.data ?? [],
+      referralDebug: {
+        byWalletCount: walletCount,
+        byCodeCount: codeCount,
+        usedFallbackToCode: walletCount === 0 && codeCount > 0,
+        referralCode: referralCode || null
+      }
     }
 
-    console.log('[dashboard] wallet:', user_wallet, 'referralCode:', referralCode, 'referrals.count:', (referrals.data?.length || 0))
+    console.log('[dashboard] wallet:', user_wallet, 'referralCode:', referralCode, 'referrals.byWallet:', walletCount, 'byCode:', codeCount)
 
     return NextResponse.json({ success: true, ...resp })
   } catch (e: any) {

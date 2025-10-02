@@ -123,6 +123,13 @@ export default function DashboardPage() {
 
         // Store raw for debug panel
         setDebugReferrals(data.referrals)
+
+        // Surface referral counts visibly without DevTools
+        try {
+          // Avoid spamming during initial mount
+          toast.dismiss()
+        } catch {}
+        toast(`Referrals: total ${totalReferrals} • confirmed ${confirmedReferrals} • pending ${pendingReferrals}`)
       }
 
       if (Array.isArray(data.forfeitures)) {
