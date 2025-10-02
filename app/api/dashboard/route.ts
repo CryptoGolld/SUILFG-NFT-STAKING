@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
         ? admin.from('referrals').select('*, staked_nfts(nft_tier)').eq('referrer_wallet', referralCode)
         : Promise.resolve({ data: [], error: null } as any),
       referralCode
-        ? admin.from('staked_nfts').select('id').eq('referral_code_used', referralCode)
+        ? admin.from('staked_nfts').select('id, nft_tier').eq('referral_code_used', referralCode)
         : Promise.resolve({ data: [], error: null } as any),
       admin.from('forfeitures').select('id, staked_nft_id, original_staker_wallet, forfeiture_reason, forfeited_at, staked_nfts!inner(nft_tier)').eq('referrer_wallet', user_wallet).order('forfeited_at', { ascending: false })
     ])
@@ -49,12 +49,22 @@ export async function POST(req: NextRequest) {
     const walletCount = referralsWallet.data?.length || 0
     const codeCount = referralsByCode.data?.length || 0
     const finalReferrals = walletCount > 0 ? (referralsWallet.data || []) : (referralsByCode.data || [])
+    const derivedReferrals = (walletCount === 0 && codeCount === 0)
+      ? (stakedByMyCode.data || []).map((row: any) => ({
+          id: `derived-${row.id}`,
+          referrer_wallet: user_wallet,
+          staked_nft_id: row.id,
+          status: 'pending',
+          is_mapped_to_reward: false,
+          staked_nfts: { nft_tier: row.nft_tier }
+        }))
+      : []
 
     const resp = {
       rewards: rewards.data ?? null,
       staked: staked.data ?? [],
       grants: grants.data ?? [],
-      referrals: finalReferrals,
+      referrals: finalReferrals.length > 0 ? finalReferrals : derivedReferrals,
       forfeitures: forfeitures.data ?? [],
       referralDebug: {
         byWalletCount: walletCount,
@@ -62,7 +72,9 @@ export async function POST(req: NextRequest) {
         usedFallbackToCode: walletCount === 0 && codeCount > 0,
         referralCode: referralCode || null,
         queryWallet: user_wallet,
-        stakedUsingMyCodeCount: stakedByMyCode.data?.length || 0
+        stakedUsingMyCodeCount: stakedByMyCode.data?.length || 0,
+        usedDerivedFromStakes: (walletCount === 0 && codeCount === 0 && (stakedByMyCode.data?.length || 0) > 0),
+        derivedCount: (walletCount === 0 && codeCount === 0) ? (stakedByMyCode.data?.length || 0) : 0
       }
     }
 
