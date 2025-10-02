@@ -56,6 +56,8 @@ export default function DashboardPage() {
   const [referrals, setReferrals] = useState<ReferralData>({ totalReferrals: 0, confirmedReferrals: 0, pendingReferrals: 0, nextRewardAt: 3 })
   const [forfeitures, setForfeitures] = useState<ForfeitureData[]>([])
   const [loading, setLoading] = useState(false)
+  const [debugReferrals, setDebugReferrals] = useState<any[]>([])
+  const DEBUG = process.env.NEXT_PUBLIC_DEBUG === 'true'
 
   useEffect(() => {
     if (isConnected && currentWallet) {
@@ -118,6 +120,9 @@ export default function DashboardPage() {
           pendingReferrals,
           nextRewardAt: 3
         })
+
+        // Store raw for debug panel
+        setDebugReferrals(data.referrals)
       }
 
       if (Array.isArray(data.forfeitures)) {
@@ -444,6 +449,18 @@ export default function DashboardPage() {
                 {loading ? 'Refreshing...' : 'Refresh Data'}
               </button>
             </div>
+
+            {DEBUG && (
+              <div className="mt-8 bg-gray-50 border border-gray-200 rounded-lg p-4">
+                <div className="text-sm font-semibold mb-2">Debug</div>
+                <pre className="text-xs whitespace-pre-wrap break-all">
+{JSON.stringify({
+  referralsCount: debugReferrals.length,
+  firstThree: debugReferrals.slice(0, 3)
+}, null, 2)}
+                </pre>
+              </div>
+            )}
           </>
         )}
       </div>
