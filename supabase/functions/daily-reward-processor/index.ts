@@ -555,6 +555,52 @@ async function isItemListedInKiosk(kioskId: string, nftObjectId: string): Promis
   return false
 }
 
+// Detect if a given NFT object is present inside a kiosk (listed or unlisted)
+async function isItemInKiosk(kioskId: string, nftObjectId: string): Promise<{ present: boolean, listed: boolean }> {
+  try {
+    let cursor: string | null | undefined = null
+    do {
+      const fieldsRes = await rpc('suix_getDynamicFields', [{ parentId: kioskId, cursor: cursor || undefined }])
+      const entries: any[] = fieldsRes?.data || []
+
+      for (const entry of entries) {
+        try {
+          const dfObj = await rpc('suix_getDynamicFieldObject', [{ parentId: kioskId, name: entry.name }])
+          const dtype: string | undefined = dfObj?.data?.type
+          const dcontent: any = dfObj?.data?.content
+          if (!dtype || !dcontent) continue
+
+          const fields = dcontent.fields || {}
+
+          // Listing detection (same as above)
+          const isListing = dtype.includes('::kiosk::Listing') || dtype.toLowerCase().includes('listing')
+          if (isListing) {
+            const listedId = fields.item_id || fields.itemId || fields.item?.fields?.id || fields.item?.id
+            if (typeof listedId === 'string' && listedId.toLowerCase() === nftObjectId.toLowerCase()) {
+              return { present: true, listed: true }
+            }
+          }
+
+          // Item presence detection (unlisted)
+          const isItem = dtype.includes('::kiosk::Item') || dtype.toLowerCase().includes('item')
+          if (isItem) {
+            const possibleId = fields.id?.id || fields.id || fields.item_id || fields.itemId
+            if (typeof possibleId === 'string' && possibleId.toLowerCase() === nftObjectId.toLowerCase()) {
+              return { present: true, listed: false }
+            }
+          }
+        } catch (_) {
+          // continue scanning
+        }
+      }
+      cursor = fieldsRes?.nextCursor
+    } while (cursor)
+  } catch (_) {
+    // ignore
+  }
+  return { present: false, listed: false }
+}
+
 // Verify NFT ownership with kiosk-awareness and basic listing detection
 async function verifyNFTOwnership(nftObjectId: string, expectedOwner: string): Promise<{ isOwned: boolean, isListed: boolean, reason?: string }> {
   try {
@@ -587,13 +633,11 @@ async function verifyNFTOwnership(nftObjectId: string, expectedOwner: string): P
       const parentId: string = owner.ObjectOwner || owner.Parent || ''
 
       // Enumerate kiosks owned by expectedOwner and see if any holds the item
-      const kiosks = await rpc('suix_getOwnedObjects', [
-        expectedOwner,
-        {
-          filter: { StructType: '0x2::kiosk::KioskOwnerCap' },
-          options: { showType: true, showContent: true }
-        }
-      ])
+      const kiosks = await rpc('suix_getOwnedObjects', [{
+        owner: expectedOwner,
+        filter: { StructType: '0x2::kiosk::KioskOwnerCap' },
+        options: { showType: true, showContent: true }
+      }])
 
       const kioskIds: string[] = []
       for (const it of (kiosks?.data || [])) {
@@ -609,12 +653,11 @@ async function verifyNFTOwnership(nftObjectId: string, expectedOwner: string): P
         return { isOwned: true, isListed: Boolean(listed), reason: listed ? 'Kiosk listing found' : undefined }
       }
 
-      // As a fallback, scan each kiosk for the item
+      // As a fallback, scan each kiosk for the item (present regardless of listing)
       for (const kioskId of kioskIds) {
-        const listed = await isItemListedInKiosk(kioskId, nftObjectId)
-        if (listed || listed === false) {
-          // If dynamic fields include the NFT, we treat as owned; listed flag as detected
-          return { isOwned: true, isListed: Boolean(listed) }
+        const presence = await isItemInKiosk(kioskId, nftObjectId)
+        if (presence.present) {
+          return { isOwned: true, isListed: presence.listed }
         }
       }
 
