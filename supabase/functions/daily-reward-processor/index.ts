@@ -565,6 +565,25 @@ async function isItemInKiosk(kioskId: string, nftObjectId: string): Promise<{ pr
 
       for (const entry of entries) {
         try {
+          const name = entry?.name
+          // Quick path: detect by dynamic field name
+          if (name?.type && typeof name.type === 'string') {
+            // Item presence (unlisted)
+            if (name.type.includes('::kiosk::Item')) {
+              const idFromName = name?.value?.id?.id || name?.value?.id || name?.value?.item_id || name?.value?.itemId
+              if (typeof idFromName === 'string' && idFromName.toLowerCase() === nftObjectId.toLowerCase()) {
+                return { present: true, listed: false }
+              }
+            }
+            // Listing presence (listed)
+            if (name.type.includes('::kiosk::Listing')) {
+              const listedIdFromName = name?.value?.item_id || name?.value?.itemId || name?.value?.item?.fields?.id || name?.value?.item?.id
+              if (typeof listedIdFromName === 'string' && listedIdFromName.toLowerCase() === nftObjectId.toLowerCase()) {
+                return { present: true, listed: true }
+              }
+            }
+          }
+
           const dfObj = await rpc('suix_getDynamicFieldObject', [{ parentId: kioskId, name: entry.name }])
           const dtype: string | undefined = dfObj?.data?.type
           const dcontent: any = dfObj?.data?.content
