@@ -633,11 +633,13 @@ async function verifyNFTOwnership(nftObjectId: string, expectedOwner: string): P
       const parentId: string = owner.ObjectOwner || owner.Parent || ''
 
       // Enumerate kiosks owned by expectedOwner and see if any holds the item
-      const kiosks = await rpc('suix_getOwnedObjects', [{
-        owner: expectedOwner,
-        filter: { StructType: '0x2::kiosk::KioskOwnerCap' },
-        options: { showType: true, showContent: true }
-      }])
+      const kiosks = await rpc('suix_getOwnedObjects', [
+        expectedOwner,
+        {
+          filter: { StructType: '0x2::kiosk::KioskOwnerCap' },
+          options: { showType: true, showContent: true }
+        }
+      ])
 
       const kioskIds: string[] = []
       for (const it of (kiosks?.data || [])) {
