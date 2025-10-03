@@ -664,8 +664,13 @@ async function verifyNFTOwnership(nftObjectId: string, expectedOwner: string): P
       for (const it of (kiosks?.data || [])) {
         const content = it?.data?.content
         const forField = content?.fields?.for
-        const capKioskId = forField?.fields?.id?.id || forField?.id
-        if (capKioskId) kioskIds.push(capKioskId)
+        let capKioskId: string | undefined
+        if (typeof forField === 'string') capKioskId = forField
+        capKioskId = capKioskId || forField?.fields?.id?.id
+        capKioskId = capKioskId || forField?.fields?.id
+        capKioskId = capKioskId || forField?.id?.id
+        capKioskId = capKioskId || forField?.id
+        if (capKioskId) kioskIds.push(String(capKioskId))
       }
 
       // If the parent is one of user's kiosks, consider owned
@@ -685,6 +690,10 @@ async function verifyNFTOwnership(nftObjectId: string, expectedOwner: string): P
       // If kiosk not owned by expected user, treat as listed if matches known marketplaces
       if (MARKETPLACE_ADDRESSES.includes(parentId)) {
         return { isOwned: false, isListed: true, reason: 'Listed on marketplace kiosk' }
+      }
+      // Final conservative fallback: if user has any kiosks and owner is an object (likely a kiosk), assume owned to prevent false forfeits
+      if (kioskIds.length > 0) {
+        return { isOwned: true, isListed: false, reason: 'Conservative kiosk fallback' }
       }
       return { isOwned: false, isListed: false, reason: 'Transferred to another kiosk/contract' }
     }
