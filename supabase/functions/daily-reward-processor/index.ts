@@ -34,9 +34,12 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    // Require Authorization: Bearer <SUPABASE_SERVICE_ROLE_KEY>
-    const authHeader = req.headers.get('Authorization')
-    if (!authHeader || !authHeader.includes('Bearer')) {
+    // Authorize: accept either Bearer token OR shared cron secret header
+    const authHeader = req.headers.get('Authorization') || ''
+    const cronHeader = req.headers.get('x-cron-secret') || req.headers.get('X-Cron-Secret')
+    const cronSecret = Deno.env.get('CRON_SECRET')
+    const isAuthorized = Boolean(authHeader.includes('Bearer') || (cronSecret && cronHeader === cronSecret))
+    if (!isAuthorized) {
       throw new Error('Unauthorized')
     }
 
