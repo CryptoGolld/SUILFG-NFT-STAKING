@@ -50,6 +50,15 @@ interface ForfeitureData {
   forfeited_at: string
 }
 
+interface ReferralGroup {
+  id: string
+  reward_tier: 'Voter' | 'Governor' | 'Council'
+  status: 'vesting' | 'claimable' | 'forfeited' | 'settled'
+  gamble_status: 'offered' | 'won' | 'lost' | 'ignored'
+  vesting_start_time: string
+  vesting_end_time: string
+}
+
 export default function DashboardPage() {
   const { isConnected, currentWallet } = useCurrentWallet()
   const [rewards, setRewards] = useState<StakingRewards>({ council_points: 0, governor_points: 0, voter_points: 0 })
@@ -63,6 +72,7 @@ export default function DashboardPage() {
   const [referralDebug, setReferralDebug] = useState<any>(null)
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
   const [expandedImages, setExpandedImages] = useState<Record<string, string>>({})
+  const [referralGroups, setReferralGroups] = useState<ReferralGroup[]>([])
 
   useEffect(() => {
     if (isConnected && currentWallet) {
@@ -149,6 +159,10 @@ export default function DashboardPage() {
           forfeited_at: forfeiture.forfeited_at
         }))
         setForfeitures(formattedForfeitures)
+      }
+
+      if (Array.isArray(data.referral_groups)) {
+        setReferralGroups(data.referral_groups)
       }
 
     } catch (error) {
@@ -472,6 +486,52 @@ export default function DashboardPage() {
                       </div>
                     </div>
                   ))}
+                </div>
+              </div>
+            )}
+
+            {/* Referral Rewards - Vesting Groups */}
+            {referralGroups.length > 0 && (
+              <div className="mt-8 bg-white rounded-lg shadow-lg p-6">
+                <h2 className="text-xl font-semibold mb-4 flex items-center">
+                  <Users className="w-5 h-5 mr-2" />
+                  Referral Rewards (Vesting)
+                </h2>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {referralGroups.map((g) => {
+                    const totalMs = Math.max(0, new Date(g.vesting_end_time).getTime() - new Date(g.vesting_start_time).getTime())
+                    const elapsedMs = Math.max(0, Math.min(Date.now() - new Date(g.vesting_start_time).getTime(), totalMs))
+                    const pct = totalMs > 0 ? Math.round((elapsedMs / totalMs) * 100) : (g.status === 'claimable' ? 100 : 0)
+                    const tierClass = g.reward_tier === 'Council' ? 'tier-card-gold' : (g.reward_tier === 'Governor' ? 'tier-card-silver' : 'tier-card-bronze')
+                    return (
+                      <div key={g.id} className={`p-4 border rounded-lg`}> 
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className={`p-2 rounded-full ${tierClass}`}>
+                              {getTierIcon(g.reward_tier)}
+                            </div>
+                            <div>
+                              <div className="font-semibold">{g.reward_tier} Tier Reward</div>
+                              <div className="text-xs text-gray-600">Status: {g.status}{g.gamble_status === 'won' ? ' • won' : (g.gamble_status === 'lost' ? ' • lost' : '')}</div>
+                            </div>
+                          </div>
+                          <div className="text-right text-sm text-gray-600">
+                            {new Date(g.vesting_end_time).toLocaleDateString()}
+                          </div>
+                        </div>
+                        <div className="mt-3">
+                          <div className="w-full bg-gray-200 rounded-full h-2">
+                            <div className="bg-green-500 h-2 rounded-full transition-all" style={{ width: `${pct}%` }}></div>
+                          </div>
+                          <div className="text-xs text-gray-600 mt-1">Vesting progress: {pct}%</div>
+                        </div>
+                        {g.status === 'claimable' && (
+                          <div className="mt-3 text-sm text-green-700">Reward is claimable.</div>
+                        )}
+                      </div>
+                    )
+                  })}
                 </div>
               </div>
             )}
