@@ -405,11 +405,11 @@ export default function DashboardPage() {
                   <div className="grid grid-cols-2 gap-3 sm:gap-4 text-center">
                     <div className="p-2 sm:p-3 bg-green-50 rounded-lg">
                       <div className="text-xl sm:text-2xl font-bold text-green-600">{referrals.confirmedReferrals}</div>
-                      <div className="text-sm text-green-600">Confirmed</div>
+                      <div className="text-sm text-green-600">Verified</div>
                     </div>
                     <div className="p-2 sm:p-3 bg-yellow-50 rounded-lg">
-                      <div className="text-xl sm:text-2xl font-bold text-yellow-600">{referrals.pendingReferrals}</div>
-                      <div className="text-sm text-yellow-600">Pending</div>
+                      <div className="text-xl sm:text-2xl font-bold text-yellow-600">{referrals.totalReferrals}</div>
+                      <div className="text-sm text-yellow-600">Referrals</div>
                     </div>
                   </div>
 
