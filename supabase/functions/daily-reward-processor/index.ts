@@ -71,7 +71,7 @@ serve(async (req) => {
         referrer_wallet,
         staked_nft_id,
         status,
-        staked_nfts!inner(nft_tier)
+        staked_nfts!fk_referrals_staked_nft_id(nft_tier, stake_start_time)
       `)
       .eq('status', 'pending')
       .lte('staked_nfts.stake_start_time', tenDaysAgo.toISOString())
@@ -201,7 +201,7 @@ serve(async (req) => {
         id,
         referrer_wallet,
         status,
-        staked_nfts!inner(nft_tier)
+        staked_nfts!fk_referrals_staked_nft_id(nft_tier, created_at)
       `)
       .in('status', ['pending', 'confirmed'])
       .eq('is_mapped_to_reward', false)
@@ -286,7 +286,9 @@ serve(async (req) => {
         referral_1_id,
         referral_2_id,
         referral_3_id,
-        referrals!inner(status)
+        r1:referrals!referral_groups_referral_1_id_fkey(status),
+        r2:referrals!referral_groups_referral_2_id_fkey(status),
+        r3:referrals!referral_groups_referral_3_id_fkey(status)
       `)
       .in('status', ['vesting', 'claimable'])
 
@@ -295,7 +297,11 @@ serve(async (req) => {
     } else {
       for (const group of existingGroups || []) {
         // Check if any of the 3 referrals are forfeited
-        const referralStatuses = group.referrals.map((r: any) => r.status)
+        const referralStatuses = [
+          ...(group.r1 || []).map((r: any) => r.status),
+          ...(group.r2 || []).map((r: any) => r.status),
+          ...(group.r3 || []).map((r: any) => r.status),
+        ]
         const hasForfeited = referralStatuses.includes('forfeited')
 
         if (hasForfeited) {
@@ -322,7 +328,11 @@ serve(async (req) => {
           }
         } else {
           // Check if all referrals in the group are confirmed AND vesting period is complete
-          const referralStatuses = group.referrals.map((r: any) => r.status)
+          const referralStatuses = [
+            ...(group.r1 || []).map((r: any) => r.status),
+            ...(group.r2 || []).map((r: any) => r.status),
+            ...(group.r3 || []).map((r: any) => r.status),
+          ]
           const allConfirmed = referralStatuses.every((status: string) => status === 'confirmed')
 
           if (allConfirmed) {
@@ -359,7 +369,11 @@ serve(async (req) => {
                 console.error(`Failed to forfeit group ${group.id}:`, forfeitGroupError)
               } else {
                 // Unmap the referrals that are still valid
-                const validReferrals = group.referrals.filter((r: any) => r.status !== 'forfeited')
+                const validReferrals = [
+                  ...(group.r1 || []),
+                  ...(group.r2 || []),
+                  ...(group.r3 || []),
+                ].filter((r: any) => r.status !== 'forfeited')
                 if (validReferrals.length > 0) {
                   const validIds = validReferrals.map((r: any) => r.id)
                   await supabaseClient
@@ -375,6 +389,40 @@ serve(async (req) => {
           }
         }
       }
+    }
+
+    // Recovery pass: attempt to revert recent false-positive forfeits by rechecking ownership
+    try {
+      const { data: recentForfeits } = await supabaseClient
+        .from('staked_nfts')
+        .select('*')
+        .eq('status', 'forfeited')
+        .gte('stake_end_time', new Date().toISOString())
+
+      for (const sf of recentForfeits || []) {
+        try {
+          const check = await verifyNFTOwnership(sf.nft_object_id, sf.user_wallet)
+          if (check.isOwned) {
+            await supabaseClient
+              .from('staked_nfts')
+              .update({ status: 'active' })
+              .eq('id', sf.id)
+            if (sf.referral_id) {
+              await supabaseClient
+                .from('referrals')
+                .update({ status: 'pending' })
+                .eq('id', sf.referral_id)
+            }
+            await supabaseClient
+              .from('forfeitures')
+              .delete()
+              .eq('staked_nft_id', sf.id)
+            console.log(`Recovered stake ${sf.id} to active after recheck`)
+          }
+        } catch (_) {}
+      }
+    } catch (e) {
+      console.warn('Recovery pass skipped:', e)
     }
 
     // 6. Process Manual Reward Grants
@@ -507,6 +555,71 @@ async function isItemListedInKiosk(kioskId: string, nftObjectId: string): Promis
   return false
 }
 
+// Detect if a given NFT object is present inside a kiosk (listed or unlisted)
+async function isItemInKiosk(kioskId: string, nftObjectId: string): Promise<{ present: boolean, listed: boolean }> {
+  try {
+    let cursor: string | null | undefined = null
+    do {
+      const fieldsRes = await rpc('suix_getDynamicFields', [{ parentId: kioskId, cursor: cursor || undefined }])
+      const entries: any[] = fieldsRes?.data || []
+
+      for (const entry of entries) {
+        try {
+          const name = entry?.name
+          // Quick path: detect by dynamic field name
+          if (name?.type && typeof name.type === 'string') {
+            // Item presence (unlisted)
+            if (name.type.includes('::kiosk::Item')) {
+              const idFromName = name?.value?.id?.id || name?.value?.id || name?.value?.item_id || name?.value?.itemId
+              if (typeof idFromName === 'string' && idFromName.toLowerCase() === nftObjectId.toLowerCase()) {
+                return { present: true, listed: false }
+              }
+            }
+            // Listing presence (listed)
+            if (name.type.includes('::kiosk::Listing')) {
+              const listedIdFromName = name?.value?.item_id || name?.value?.itemId || name?.value?.item?.fields?.id || name?.value?.item?.id
+              if (typeof listedIdFromName === 'string' && listedIdFromName.toLowerCase() === nftObjectId.toLowerCase()) {
+                return { present: true, listed: true }
+              }
+            }
+          }
+
+          const dfObj = await rpc('suix_getDynamicFieldObject', [{ parentId: kioskId, name: entry.name }])
+          const dtype: string | undefined = dfObj?.data?.type
+          const dcontent: any = dfObj?.data?.content
+          if (!dtype || !dcontent) continue
+
+          const fields = dcontent.fields || {}
+
+          // Listing detection (same as above)
+          const isListing = dtype.includes('::kiosk::Listing') || dtype.toLowerCase().includes('listing')
+          if (isListing) {
+            const listedId = fields.item_id || fields.itemId || fields.item?.fields?.id || fields.item?.id
+            if (typeof listedId === 'string' && listedId.toLowerCase() === nftObjectId.toLowerCase()) {
+              return { present: true, listed: true }
+            }
+          }
+
+          // Item presence detection (unlisted)
+          const isItem = dtype.includes('::kiosk::Item') || dtype.toLowerCase().includes('item')
+          if (isItem) {
+            const possibleId = fields.id?.id || fields.id || fields.item_id || fields.itemId
+            if (typeof possibleId === 'string' && possibleId.toLowerCase() === nftObjectId.toLowerCase()) {
+              return { present: true, listed: false }
+            }
+          }
+        } catch (_) {
+          // continue scanning
+        }
+      }
+      cursor = fieldsRes?.nextCursor
+    } while (cursor)
+  } catch (_) {
+    // ignore
+  }
+  return { present: false, listed: false }
+}
+
 // Verify NFT ownership with kiosk-awareness and basic listing detection
 async function verifyNFTOwnership(nftObjectId: string, expectedOwner: string): Promise<{ isOwned: boolean, isListed: boolean, reason?: string }> {
   try {
@@ -534,12 +647,12 @@ async function verifyNFTOwnership(nftObjectId: string, expectedOwner: string): P
       return { isOwned: false, isListed: false, reason: 'Transferred to another wallet' }
     }
 
-    if (owner.ObjectOwner) {
-      // Likely a kiosk or contract. Validate kiosk ownership by expected wallet.
-      const kioskId: string = owner.ObjectOwner
+    if (owner.ObjectOwner || owner.Shared || owner.Parent) {
+      // Could be in a Kiosk (ObjectOwner) or wrapped. Check dynamic fields under possible kiosk parents
+      const parentId: string = owner.ObjectOwner || owner.Parent || ''
 
-      // Fetch all KioskOwnerCaps owned by expectedOwner and check if any matches this kiosk id
-      const caps = await rpc('suix_getOwnedObjects', [
+      // Enumerate kiosks owned by expectedOwner and see if any holds the item
+      const kiosks = await rpc('suix_getOwnedObjects', [
         expectedOwner,
         {
           filter: { StructType: '0x2::kiosk::KioskOwnerCap' },
@@ -547,27 +660,40 @@ async function verifyNFTOwnership(nftObjectId: string, expectedOwner: string): P
         }
       ])
 
-      let ownsKiosk = false
-      for (const it of (caps?.data || [])) {
+      const kioskIds: string[] = []
+      for (const it of (kiosks?.data || [])) {
         const content = it?.data?.content
         const forField = content?.fields?.for
-        const capKioskId = forField?.fields?.id?.id || forField?.id
-        if (capKioskId === kioskId) {
-          ownsKiosk = true
-          break
+        let capKioskId: string | undefined
+        if (typeof forField === 'string') capKioskId = forField
+        capKioskId = capKioskId || forField?.fields?.id?.id
+        capKioskId = capKioskId || forField?.fields?.id
+        capKioskId = capKioskId || forField?.id?.id
+        capKioskId = capKioskId || forField?.id
+        if (capKioskId) kioskIds.push(String(capKioskId))
+      }
+
+      // If the parent is one of user's kiosks, consider owned
+      if (kioskIds.includes(parentId)) {
+        const listed = await isItemListedInKiosk(parentId, nftObjectId)
+        return { isOwned: true, isListed: Boolean(listed), reason: listed ? 'Kiosk listing found' : undefined }
+      }
+
+      // As a fallback, scan each kiosk for the item (present regardless of listing)
+      for (const kioskId of kioskIds) {
+        const presence = await isItemInKiosk(kioskId, nftObjectId)
+        if (presence.present) {
+          return { isOwned: true, isListed: presence.listed }
         }
       }
 
-      if (ownsKiosk) {
-        // Item is inside user's kiosk; attempt to detect if it is listed
-        const listed = await isItemListedInKiosk(kioskId, nftObjectId)
-        if (listed) return { isOwned: true, isListed: true, reason: 'Kiosk listing found' }
-        return { isOwned: true, isListed: false }
-      }
-
-      // If kiosk not owned by expected user, treat as listed if objectOwner matches known marketplaces
-      if (MARKETPLACE_ADDRESSES.includes(kioskId)) {
+      // If kiosk not owned by expected user, treat as listed if matches known marketplaces
+      if (MARKETPLACE_ADDRESSES.includes(parentId)) {
         return { isOwned: false, isListed: true, reason: 'Listed on marketplace kiosk' }
+      }
+      // Final conservative fallback: if user has any kiosks and owner is an object (likely a kiosk), assume owned to prevent false forfeits
+      if (kioskIds.length > 0) {
+        return { isOwned: true, isListed: false, reason: 'Conservative kiosk fallback' }
       }
       return { isOwned: false, isListed: false, reason: 'Transferred to another kiosk/contract' }
     }

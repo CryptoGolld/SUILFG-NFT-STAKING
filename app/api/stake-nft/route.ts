@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { user_wallet, nft_object_id, nft_tier, staking_duration_days, stake_duration_months, referral_code_used, verification_code } = body
+    const { user_wallet, nft_object_id, nft_tier, staking_duration_days, stake_duration_months, referral_code_used, verification_code, signed_message, signature } = body
 
     // Debug log to server console (shows up in Vercel logs)
     console.log('stake-nft API received:', {
@@ -13,7 +13,9 @@ export async function POST(request: NextRequest) {
       staking_duration_days,
       stake_duration_months,
       referral_code_used,
-      verification_code
+      verification_code,
+      has_signed_message: Boolean(signed_message),
+      has_signature: Boolean(signature)
     })
 
     // Call Supabase Edge Function
@@ -49,7 +51,9 @@ export async function POST(request: NextRequest) {
         staking_duration_days,
         stake_duration_months,
         referral_code_used,
-        verification_code
+        verification_code,
+        signed_message,
+        signature
       })
     })
     let data: any = null

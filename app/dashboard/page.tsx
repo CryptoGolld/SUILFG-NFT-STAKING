@@ -24,6 +24,8 @@ interface StakedNFT {
   stake_start_time: string
   stake_end_time: string
   status: 'active' | 'completed' | 'forfeited'
+  referrer_username?: string | null
+  referrer_wallet?: string | null
 }
 
 interface ManualGrant {
@@ -48,6 +50,15 @@ interface ForfeitureData {
   forfeited_at: string
 }
 
+interface ReferralGroup {
+  id: string
+  reward_tier: 'Voter' | 'Governor' | 'Council'
+  status: 'vesting' | 'claimable' | 'forfeited' | 'settled'
+  gamble_status: 'offered' | 'won' | 'lost' | 'ignored'
+  vesting_start_time: string
+  vesting_end_time: string
+}
+
 export default function DashboardPage() {
   const { isConnected, currentWallet } = useCurrentWallet()
   const [rewards, setRewards] = useState<StakingRewards>({ council_points: 0, governor_points: 0, voter_points: 0 })
@@ -56,6 +67,12 @@ export default function DashboardPage() {
   const [referrals, setReferrals] = useState<ReferralData>({ totalReferrals: 0, confirmedReferrals: 0, pendingReferrals: 0, nextRewardAt: 3 })
   const [forfeitures, setForfeitures] = useState<ForfeitureData[]>([])
   const [loading, setLoading] = useState(false)
+  const [debugReferrals, setDebugReferrals] = useState<any[]>([])
+  const [showDebug, setShowDebug] = useState(false)
+  const [referralDebug, setReferralDebug] = useState<any>(null)
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({})
+  const [expandedImages, setExpandedImages] = useState<Record<string, string>>({})
+  const [referralGroups, setReferralGroups] = useState<ReferralGroup[]>([])
 
   useEffect(() => {
     if (isConnected && currentWallet) {
@@ -92,7 +109,9 @@ export default function DashboardPage() {
           tier: nft.nft_tier,
           stake_start_time: nft.stake_start_time,
           stake_end_time: nft.stake_end_time,
-          status: nft.status
+          status: nft.status,
+          referrer_username: nft.referrer_username || null,
+          referrer_wallet: nft.referrer_wallet || null
         }))
         setStakedNfts(formattedStakedNfts)
       }
@@ -118,6 +137,17 @@ export default function DashboardPage() {
           pendingReferrals,
           nextRewardAt: 3
         })
+
+        // Store raw for debug panel
+        setDebugReferrals(data.referrals)
+        setReferralDebug(data.referralDebug || null)
+
+        // Surface referral counts visibly without DevTools
+        try {
+          // Avoid spamming during initial mount
+          toast.dismiss()
+        } catch {}
+        toast(`Referrals: total ${totalReferrals} • confirmed ${confirmedReferrals} • pending ${pendingReferrals}`)
       }
 
       if (Array.isArray(data.forfeitures)) {
@@ -129,6 +159,10 @@ export default function DashboardPage() {
           forfeited_at: forfeiture.forfeited_at
         }))
         setForfeitures(formattedForfeitures)
+      }
+
+      if (Array.isArray(data.referral_groups)) {
+        setReferralGroups(data.referral_groups)
       }
 
     } catch (error) {
@@ -157,6 +191,27 @@ export default function DashboardPage() {
       case 'Governor': return <Star className="w-8 h-8" />
       case 'Voter': return <Award className="w-8 h-8" />
       default: return <Trophy className="w-8 h-8" />
+    }
+  }
+
+  // Lazy load NFT image on expand using Sui RPC display fields
+  const loadNftImage = async (objectId: string) => {
+    try {
+      if (expandedImages[objectId]) return
+      const res = await fetch('https://fullnode.mainnet.sui.io:443', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'sui_getObject', params: [objectId, { showContent: true, showDisplay: true }] })
+      })
+      const json = await res.json()
+      const display = json?.result?.data?.display?.data || {}
+      const contentFields = json?.result?.data?.content?.fields || {}
+      const image = display.image_url || display.image || contentFields.image_url || contentFields.url || ''
+      if (image) {
+        setExpandedImages((prev) => ({ ...prev, [objectId]: image }))
+      }
+    } catch (_) {
+      // ignore
     }
   }
 
@@ -291,21 +346,63 @@ export default function DashboardPage() {
                 ) : (
                   <div className="space-y-4">
                     {stakedNfts.map((nft) => (
-                      <div key={nft.id} className="flex items-center justify-between p-4 border rounded-lg">
-                        <div className="flex items-center space-x-3">
-                          <div className="w-12 h-12 bg-gray-200 rounded-lg flex items-center justify-center">
-                            {getTierIcon(nft.tier)}
-                          </div>
-                          <div>
-                            <h3 className="font-medium">{nft.name}</h3>
-                            <p className="text-sm text-gray-600 capitalize">{nft.tier} Tier</p>
-                          </div>
+                  <div key={nft.id} className="p-4 border rounded-lg">
+                    <button
+                      onClick={async () => {
+                        setExpanded((prev) => ({ ...prev, [nft.id]: !prev[nft.id] }))
+                        if (!expanded[nft.id]) await loadNftImage(nft.nft_object_id)
+                      }}
+                      className="w-full flex items-center justify-between"
+                    >
+                      <div className="flex items-center space-x-3 text-left">
+                        <div className="w-12 h-12 bg-gray-200 rounded-lg flex items-center justify-center">
+                          {getTierIcon(nft.tier)}
                         </div>
-                        <div className="text-right">
-                          <div className="text-sm font-medium">{getTimeRemaining(nft.stake_end_time)}</div>
-                          <div className="text-xs text-gray-500">remaining</div>
+                        <div>
+                          <h3 className="font-medium">{nft.name}</h3>
+                          <p className="text-sm text-gray-600 capitalize">{nft.tier} Tier</p>
                         </div>
                       </div>
+                      <div className="text-right">
+                        <div className="text-sm font-medium">{getTimeRemaining(nft.stake_end_time)}</div>
+                        <div className="text-xs text-gray-500">{expanded[nft.id] ? 'hide' : 'details'}</div>
+                      </div>
+                    </button>
+
+                    {expanded[nft.id] && (
+                      <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div className="sm:col-span-1">
+                          <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden">
+                            {expandedImages[nft.nft_object_id] ? (
+                              <img src={expandedImages[nft.nft_object_id]} alt={nft.name} className="w-full h-full object-cover" />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center text-gray-400 text-sm">No image</div>
+                            )}
+                          </div>
+                        </div>
+                        <div className="sm:col-span-2">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                            <div>
+                              <div className="text-gray-500">Referral Code Used</div>
+                              <div className="font-mono break-all">{/* shown below from API staked enrichment when we add it to type */}</div>
+                            </div>
+                            <div>
+                              <div className="text-gray-500">Referrer</div>
+                              <div>{nft.referrer_username ? `${nft.referrer_username} (${nft.referrer_wallet?.slice(0,6)}...${nft.referrer_wallet?.slice(-4)})` : '—'}</div>
+                            </div>
+                            <div>
+                              <div className="text-gray-500">NFT ID</div>
+                              <div className="font-mono break-all">{nft.nft_object_id}</div>
+                            </div>
+                            <div>
+                              <div className="text-gray-500">Stake Window</div>
+                              <div>{new Date(nft.stake_start_time).toLocaleDateString()} → {new Date(nft.stake_end_time).toLocaleDateString()}</div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                     ))}
                   </div>
                 )}
@@ -322,11 +419,11 @@ export default function DashboardPage() {
                   <div className="grid grid-cols-2 gap-3 sm:gap-4 text-center">
                     <div className="p-2 sm:p-3 bg-green-50 rounded-lg">
                       <div className="text-xl sm:text-2xl font-bold text-green-600">{referrals.confirmedReferrals}</div>
-                      <div className="text-sm text-green-600">Confirmed</div>
+                      <div className="text-sm text-green-600">Verified</div>
                     </div>
                     <div className="p-2 sm:p-3 bg-yellow-50 rounded-lg">
-                      <div className="text-xl sm:text-2xl font-bold text-yellow-600">{referrals.pendingReferrals}</div>
-                      <div className="text-sm text-yellow-600">Pending</div>
+                      <div className="text-xl sm:text-2xl font-bold text-yellow-600">{referrals.totalReferrals}</div>
+                      <div className="text-sm text-yellow-600">Referrals</div>
                     </div>
                   </div>
 
@@ -393,6 +490,52 @@ export default function DashboardPage() {
               </div>
             )}
 
+            {/* Referral Rewards - Vesting Groups */}
+            {referralGroups.length > 0 && (
+              <div className="mt-8 bg-white rounded-lg shadow-lg p-6">
+                <h2 className="text-xl font-semibold mb-4 flex items-center">
+                  <Users className="w-5 h-5 mr-2" />
+                  Referral Rewards (Vesting)
+                </h2>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {referralGroups.map((g) => {
+                    const totalMs = Math.max(0, new Date(g.vesting_end_time).getTime() - new Date(g.vesting_start_time).getTime())
+                    const elapsedMs = Math.max(0, Math.min(Date.now() - new Date(g.vesting_start_time).getTime(), totalMs))
+                    const pct = totalMs > 0 ? Math.round((elapsedMs / totalMs) * 100) : (g.status === 'claimable' ? 100 : 0)
+                    const tierClass = g.reward_tier === 'Council' ? 'tier-card-gold' : (g.reward_tier === 'Governor' ? 'tier-card-silver' : 'tier-card-bronze')
+                    return (
+                      <div key={g.id} className={`p-4 border rounded-lg`}> 
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className={`p-2 rounded-full ${tierClass}`}>
+                              {getTierIcon(g.reward_tier)}
+                            </div>
+                            <div>
+                              <div className="font-semibold">{g.reward_tier} Tier Reward</div>
+                              <div className="text-xs text-gray-600">Status: {g.status}{g.gamble_status === 'won' ? ' • won' : (g.gamble_status === 'lost' ? ' • lost' : '')}</div>
+                            </div>
+                          </div>
+                          <div className="text-right text-sm text-gray-600">
+                            {new Date(g.vesting_end_time).toLocaleDateString()}
+                          </div>
+                        </div>
+                        <div className="mt-3">
+                          <div className="w-full bg-gray-200 rounded-full h-2">
+                            <div className="bg-green-500 h-2 rounded-full transition-all" style={{ width: `${pct}%` }}></div>
+                          </div>
+                          <div className="text-xs text-gray-600 mt-1">Vesting progress: {pct}%</div>
+                        </div>
+                        {g.status === 'claimable' && (
+                          <div className="mt-3 text-sm text-green-700">Reward is claimable.</div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
             {/* Forfeitures Tracker */}
             {forfeitures.length > 0 && (
               <div className="mt-8 bg-white rounded-lg shadow-lg p-6">
@@ -444,6 +587,7 @@ export default function DashboardPage() {
                 {loading ? 'Refreshing...' : 'Refresh Data'}
               </button>
             </div>
+            {/* Debug toggle removed per request */}
           </>
         )}
       </div>
