@@ -101,8 +101,8 @@ serve(async (req) => {
         continue
       }
       try {
-        // Verify NFT ownership using Sui RPC
-        const ownershipResult = await verifyNFTOwnership(stake.nft_object_id, stake.user_wallet)
+        // Verify NFT ownership using Sui RPC with retries/backoff to avoid false forfeits
+        const ownershipResult = await verifyNFTOwnershipWithRetries(stake.nft_object_id, stake.user_wallet)
 
         if (ownershipResult.isOwned) {
           // Calculate points for this stake based on tier (per 10 minutes)
@@ -146,8 +146,15 @@ serve(async (req) => {
             console.log(`Added ${pointsToAdd} ${stake.nft_tier} points (${stake.stake_duration_months}mo × ${durationMultiplier}x) to ${stake.user_wallet}`)
           }
         } else {
-          // Ownership verification failed - forfeit the stake and track the forfeiture
-          const forfeitureReason = ownershipResult.isListed ? 'listed' : 'transferred'
+          // Ownership verification failed - run a second-source sanity check before forfeiting
+          const secondCheck = await conservativeOwnershipHeuristic(stake.nft_object_id, stake.user_wallet)
+          if (secondCheck.isOwned) {
+            console.log(`Second-source check indicates ownership; skipping forfeiture for stake ${stake.id}`)
+            continue
+          }
+
+          // Proceed to forfeit only if both checks indicate not owned
+          const forfeitureReason = ownershipResult.isListed || secondCheck.isListed ? 'listed' : 'transferred'
 
           const { error: forfeitError } = await supabaseClient
             .from('staked_nfts')
@@ -703,5 +710,68 @@ async function verifyNFTOwnership(nftObjectId: string, expectedOwner: string): P
     console.error('Error verifying NFT ownership:', error)
     // In case of RPC errors, we'll be conservative and return false
     return { isOwned: false, isListed: false, reason: 'RPC error' }
+  }
+}
+
+// Simple sleep utility for retries/backoff
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+// Double-check ownership with retries and backoff to avoid false forfeits
+async function verifyNFTOwnershipWithRetries(
+  nftObjectId: string,
+  expectedOwner: string,
+  retries: number = 2,
+  delayMs: number = 1500
+): Promise<{ isOwned: boolean; isListed: boolean; reason?: string }> {
+  let lastResult: { isOwned: boolean; isListed: boolean; reason?: string } = { isOwned: false, isListed: false, reason: 'initial' }
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      lastResult = await verifyNFTOwnership(nftObjectId, expectedOwner)
+      if (lastResult.isOwned) {
+        return lastResult
+      }
+    } catch (_) {
+      // ignore and retry after backoff
+    }
+    if (attempt < retries) {
+      await sleep(delayMs * (attempt + 1))
+    }
+  }
+  return lastResult
+}
+
+// A conservative heuristic to reduce false positives: cross-check via recent activity/changes
+// If the object still appears resolvable with expected owner context, prefer NOT forfeiting
+async function conservativeOwnershipHeuristic(
+  nftObjectId: string,
+  expectedOwner: string
+): Promise<{ isOwned: boolean; isListed: boolean; reason?: string }> {
+  try {
+    // Quick re-fetch with minimal options to reduce RPC surface area
+    const obj = await rpc('sui_getObject', [nftObjectId, { showOwner: true }])
+    const owner = obj?.data?.owner
+    if (!owner) return { isOwned: false, isListed: false, reason: 'No owner from heuristic' }
+
+    if (owner.AddressOwner && owner.AddressOwner === expectedOwner) {
+      return { isOwned: true, isListed: false, reason: 'Heuristic address match' }
+    }
+
+    // If kiosk-owned, attempt a lightweight kiosk ownership correlation
+    if (owner.ObjectOwner) {
+      const kioskId: string = owner.ObjectOwner
+      // If kiosk equals known marketplace, treat as listed
+      if (MARKETPLACE_ADDRESSES.includes(kioskId)) {
+        return { isOwned: false, isListed: true, reason: 'Heuristic marketplace kiosk' }
+      }
+      // Assume kiosk could be user's; in heuristic mode, bias toward owned unless proven otherwise
+      return { isOwned: true, isListed: false, reason: 'Heuristic kiosk bias' }
+    }
+
+    return { isOwned: false, isListed: false, reason: 'Heuristic unknown owner' }
+  } catch (e) {
+    // If heuristic fails, do not force forfeiture
+    return { isOwned: true, isListed: false, reason: 'Heuristic failure; avoid forfeiture' }
   }
 }

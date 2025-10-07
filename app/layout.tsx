@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { SuiClientProvider, WalletProvider, createNetworkConfig } from '@mysten/dapp-kit'
 import { getFullnodeUrl } from '@mysten/sui.js/client'
 import { Toaster } from 'react-hot-toast'
+import { usePathname } from 'next/navigation'
 
 const queryClient = new QueryClient()
 
@@ -14,6 +15,8 @@ export default function RootLayout({
 }: {
   children: React.ReactNode
 }) {
+  const pathname = usePathname()
+  const showToaster = !(pathname && pathname.startsWith('/dashboard'))
   return (
     <html lang="en">
       <body>
@@ -30,7 +33,7 @@ export default function RootLayout({
               storageKey="sui-wallet"
             >
               {children}
-              <Toaster position="top-right" />
+              {showToaster && <Toaster position="top-right" />}
             </WalletProvider>
               </SuiClientProvider>
             )
