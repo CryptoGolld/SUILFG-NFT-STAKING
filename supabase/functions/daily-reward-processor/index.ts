@@ -146,7 +146,22 @@ serve(async (req) => {
             console.log(`Added ${pointsToAdd} ${stake.nft_tier} points (${stake.stake_duration_months}mo × ${durationMultiplier}x) to ${stake.user_wallet}`)
           }
         } else {
-          // Ownership verification failed - forfeit the stake and track the forfeiture
+          // Ownership verification failed - reduce false positives by skipping ambiguous cases
+          const reason = String(ownershipResult.reason || '').toLowerCase()
+          const skipReasons = [
+            'rpc error',
+            'unknown owner type',
+            'transferred to another kiosk/contract',
+            'no owner found'
+          ]
+          const kioskMentioned = reason.includes('kiosk')
+
+          if (skipReasons.includes(reason) || kioskMentioned) {
+            console.log(`Skipping forfeiture for stake ${stake.id} due to ambiguous reason: ${ownershipResult.reason}`)
+            continue
+          }
+
+          // Proceed with forfeiture for clear transfer/listing cases
           const forfeitureReason = ownershipResult.isListed ? 'listed' : 'transferred'
 
           const { error: forfeitError } = await supabaseClient
