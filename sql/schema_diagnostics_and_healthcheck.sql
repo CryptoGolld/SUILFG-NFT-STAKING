@@ -250,7 +250,27 @@ FROM public.staking_rewards;
 
 -- =========================
 -- TARGETED DIAGNOSTIC: 3 NFT OBJECT IDS (example; update as needed)
+-- Note: CTEs are scoped per statement, so each section repeats its CTEs.
 -- =========================
+
+-- A) All stake rows for the specified NFTs (newest first per NFT)
+WITH target AS (
+  SELECT unnest(ARRAY[
+    '0x383c2f909576dc651906bcff53d5eab8e1b3a58f787b74d39e80bdb6958e8887',
+    '0x347919e72cdfdd2f26caccfceb62d47bc446e3c0b4c2e19aa8806bd011455c54',
+    '0xce7224fa7fbe188b8b62696d2dd881311b00a060c96128175fba7f6f9c2d924f'
+  ]) AS nft_object_id
+),
+stakes AS (
+  SELECT s.*
+  FROM public.staked_nfts s
+  JOIN target t ON t.nft_object_id = s.nft_object_id
+)
+SELECT 'A_stakes_all' AS section, s.nft_object_id, s.id AS stake_id, s.user_wallet, s.nft_tier, s.status, s.stake_start_time, s.stake_end_time, s.stake_duration_months, s.referral_id, s.created_at
+FROM stakes s
+ORDER BY s.nft_object_id, s.created_at DESC;
+
+-- B) Latest (most recent) stake per NFT
 WITH target AS (
   SELECT unnest(ARRAY[
     '0x383c2f909576dc651906bcff53d5eab8e1b3a58f787b74d39e80bdb6958e8887',
@@ -272,33 +292,91 @@ latest_per_nft AS (
     FROM stakes s
   ) z
   WHERE z.rn = 1
-),
-wallets AS (
-  SELECT DISTINCT user_wallet FROM stakes
 )
-SELECT 'A_stakes_all' AS section, s.nft_object_id, s.id AS stake_id, s.user_wallet, s.nft_tier, s.status, s.stake_start_time, s.stake_end_time, s.stake_duration_months, s.referral_id, s.created_at
-FROM stakes s
-ORDER BY s.nft_object_id, s.created_at DESC;
-
 SELECT 'B_latest_per_nft' AS section, l.nft_object_id, l.id AS stake_id, l.user_wallet, l.nft_tier, l.status, l.stake_start_time, l.stake_end_time, l.stake_duration_months, l.referral_id, l.created_at
 FROM latest_per_nft l
 ORDER BY l.nft_object_id;
 
+-- C) Rewards rows for the wallets involved in those stakes
+WITH target AS (
+  SELECT unnest(ARRAY[
+    '0x383c2f909576dc651906bcff53d5eab8e1b3a58f787b74d39e80bdb6958e8887',
+    '0x347919e72cdfdd2f26caccfceb62d47bc446e3c0b4c2e19aa8806bd011455c54',
+    '0xce7224fa7fbe188b8b62696d2dd881311b00a060c96128175fba7f6f9c2d924f'
+  ]) AS nft_object_id
+),
+stakes AS (
+  SELECT s.*
+  FROM public.staked_nfts s
+  JOIN target t ON t.nft_object_id = s.nft_object_id
+),
+wallets AS (
+  SELECT DISTINCT user_wallet FROM stakes
+)
 SELECT 'C_rewards_for_wallets' AS section, sr.user_wallet, sr.council_points, sr.governor_points, sr.voter_points, sr.last_updated
 FROM public.staking_rewards sr
 JOIN wallets w ON w.user_wallet = sr.user_wallet
 ORDER BY sr.user_wallet;
 
+-- D) Latest stake per NFT joined with rewards for those wallets
+WITH target AS (
+  SELECT unnest(ARRAY[
+    '0x383c2f909576dc651906bcff53d5eab8e1b3a58f787b74d39e80bdb6958e8887',
+    '0x347919e72cdfdd2f26caccfceb62d47bc446e3c0b4c2e19aa8806bd011455c54',
+    '0xce7224fa7fbe188b8b62696d2dd881311b00a060c96128175fba7f6f9c2d924f'
+  ]) AS nft_object_id
+),
+stakes AS (
+  SELECT s.*
+  FROM public.staked_nfts s
+  JOIN target t ON t.nft_object_id = s.nft_object_id
+),
+latest_per_nft AS (
+  SELECT *
+  FROM (
+    SELECT
+      s.*,
+      ROW_NUMBER() OVER (PARTITION BY s.nft_object_id ORDER BY s.created_at DESC) AS rn
+    FROM stakes s
+  ) z
+  WHERE z.rn = 1
+)
 SELECT 'D_join_stakes_rewards' AS section, s.nft_object_id, s.user_wallet, s.nft_tier, s.status, sr.council_points, sr.governor_points, sr.voter_points, sr.last_updated
 FROM latest_per_nft s
 LEFT JOIN public.staking_rewards sr ON sr.user_wallet = s.user_wallet
 ORDER BY s.nft_object_id;
 
+-- E) Forfeitures rows touching these stakes
+WITH target AS (
+  SELECT unnest(ARRAY[
+    '0x383c2f909576dc651906bcff53d5eab8e1b3a58f787b74d39e80bdb6958e8887',
+    '0x347919e72cdfdd2f26caccfceb62d47bc446e3c0b4c2e19aa8806bd011455c54',
+    '0xce7224fa7fbe188b8b62696d2dd881311b00a060c96128175fba7f6f9c2d924f'
+  ]) AS nft_object_id
+),
+stakes AS (
+  SELECT s.*
+  FROM public.staked_nfts s
+  JOIN target t ON t.nft_object_id = s.nft_object_id
+)
 SELECT 'E_forfeitures_for_these' AS section, f.*
 FROM public.forfeitures f
 WHERE f.staked_nft_id IN (SELECT id FROM stakes)
 ORDER BY f.forfeited_at DESC;
 
+-- F) Referrals linked to these stakes
+WITH target AS (
+  SELECT unnest(ARRAY[
+    '0x383c2f909576dc651906bcff53d5eab8e1b3a58f787b74d39e80bdb6958e8887',
+    '0x347919e72cdfdd2f26caccfceb62d47bc446e3c0b4c2e19aa8806bd011455c54',
+    '0xce7224fa7fbe188b8b62696d2dd881311b00a060c96128175fba7f6f9c2d924f'
+  ]) AS nft_object_id
+),
+stakes AS (
+  SELECT s.*
+  FROM public.staked_nfts s
+  JOIN target t ON t.nft_object_id = s.nft_object_id
+)
 SELECT 'F_referrals_for_these' AS section, r.*
 FROM public.referrals r
 WHERE r.id IN (SELECT referral_id FROM stakes WHERE referral_id IS NOT NULL)
