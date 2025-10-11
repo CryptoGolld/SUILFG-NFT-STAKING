@@ -10,6 +10,14 @@ const MARKETPLACE_ADDRESSES = [
   // Example: '0x123...', '0x456...'
 ]
 
+// Normalize marketplace addresses into a Set for fast, case-insensitive checks
+const MARKETPLACE_SET = new Set<string>((MARKETPLACE_ADDRESSES || []).map((a) => (typeof a === 'string' ? a.toLowerCase() : a)))
+
+// Small grace period to avoid false forfeits immediately after a stake is created
+const GRACE_PERIOD_MS = 60 * 60 * 1000 // 60 minutes
+
+const normalizeAddress = (addr?: string) => (typeof addr === 'string' ? addr.toLowerCase() : '')
+
 // Points configuration per tier per hour
 const POINTS_PER_HOUR = {
   'Council': 300,   // Gold tier - 300 points per hour (7,200/day)
@@ -155,6 +163,30 @@ serve(async (req) => {
             'no owner found'
           ]
           const kioskMentioned = reason.includes('kiosk')
+
+          // Extra protection: if this is a very recent stake and it's the latest active row for this NFT, skip forfeiture once
+          // This avoids race/consistency quirks right after restaking
+          let createdWithinGrace = false
+          try {
+            const createdAtMs = new Date(stake.created_at || stake.stake_start_time || Date.now()).getTime()
+            createdWithinGrace = Math.abs(Date.now() - createdAtMs) < GRACE_PERIOD_MS
+          } catch (_) {}
+          if (createdWithinGrace) {
+            try {
+              const { data: latestActive } = await supabaseClient
+                .from('staked_nfts')
+                .select('id')
+                .eq('nft_object_id', stake.nft_object_id)
+                .eq('status', 'active')
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .single()
+              if (latestActive?.id === stake.id) {
+                console.log(`Skipping forfeiture for very recent latest stake ${stake.id} (grace period)`) 
+                continue
+              }
+            } catch (_) {}
+          }
 
           if (skipReasons.includes(reason) || kioskMentioned) {
             console.log(`Skipping forfeiture for stake ${stake.id} due to ambiguous reason: ${ownershipResult.reason}`)
