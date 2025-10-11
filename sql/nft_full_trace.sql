@@ -29,7 +29,7 @@ SELECT 'C_referrals' AS section, r.*, s.nft_object_id, s.nft_tier, s.user_wallet
 FROM public.referrals r
 JOIN public.staked_nfts s ON s.id = r.staked_nft_id
 JOIN tmp_target_nfts t ON t.nft_object_id = s.nft_object_id
-ORDER BY r.created_at DESC NULLS LAST;
+ORDER BY s.created_at DESC;
 
 -- D) Referral groups that include those referrals (+ each referral's status)
 WITH related_refs AS (
