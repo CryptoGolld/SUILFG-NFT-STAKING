@@ -48,7 +48,8 @@ SELECT
   conname                             AS constraint_name,
   CASE contype
     WHEN 'p' THEN 'PRIMARY KEY'
-    WHEN 'f' THEN 'FOREIGN KEY'\n    WHEN 'u' THEN 'UNIQUE'
+    WHEN 'f' THEN 'FOREIGN KEY'
+    WHEN 'u' THEN 'UNIQUE'
     WHEN 'c' THEN 'CHECK'
     ELSE contype::text
   END                                 AS constraint_type,
