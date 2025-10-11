@@ -72,7 +72,7 @@ ORDER BY tablename, indexname;
 SELECT
   schemaname,
   tablename,
-  polname         AS policy_name,
+  policyname      AS policy_name,
   cmd             AS command,
   permissive,
   roles,
