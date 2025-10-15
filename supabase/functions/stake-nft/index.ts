@@ -82,16 +82,14 @@ serve(async (req) => {
       throw new Error('Missing wallet address')
     }
 
-    // Check if NFT is already staked
-    const { data: existingStake } = await supabaseClient
+    // Check if NFT has an active stake; do not block insert
+    // A DB trigger (if configured) will archive/delete any prior rows for the same NFT
+    const { data: existingActiveStake } = await supabaseClient
       .from('staked_nfts')
       .select('id')
       .eq('nft_object_id', nft_object_id)
-      .single()
-
-    if (existingStake) {
-      throw new Error('NFT is already staked')
-    }
+      .eq('status', 'active')
+      .maybeSingle()
 
     // Re-use check: Check if this NFT has been used in a confirmed referral before for the same referrer
     let referralId = null
